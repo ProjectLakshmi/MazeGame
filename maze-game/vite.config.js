@@ -1,23 +1,19 @@
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import { VitePWA } from 'vite-plugin-pwa'
-import { fileURLToPath, URL } from 'node:url'
 
 export default defineConfig({
   plugins: [
     vue(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['favicon.ico'],
       manifest: {
-        name: 'My Vue App',
-        short_name: 'MyApp',
-        description: 'My Vue PWA',
-        theme_color: '#4DBA87',
+        name: 'Maze Game',
+        short_name: 'MazeGame',
+        description: 'A fun maze puzzle game',
+        theme_color: '#1e293b',
         background_color: '#ffffff',
         display: 'standalone',
-        orientation: 'portrait',
-        start_url: '/',
         icons: [
           {
             src: 'pwa-192x192.png',
@@ -32,11 +28,5 @@ export default defineConfig({
         ]
       }
     })
-  ],
-
-  resolve: {
-    alias: {
-      '@': fileURLToPath(new URL('./src', import.meta.url))
-    }
-  }
+  ]
 })
