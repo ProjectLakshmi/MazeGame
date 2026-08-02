@@ -276,5 +276,49 @@ onUnmounted(() => {
 
 <template>
   <h2>Level {{ currentLevelIndex + 1 }}</h2>
-  <canvas ref="canvasEl" style="border: 2px solid black;"></canvas>
+
+  <div class="canvas-wrap">
+    <canvas ref="canvasEl"></canvas>
+  </div>
+
+  <div class="touch-controls">
+    <button @click="tryMove(-1, 0)" class="up">↑</button>
+    <div class="middle-row">
+      <button @click="tryMove(0, -1)" class="left">←</button>
+      <button @click="tryMove(1, 0)" class="down">↓</button>
+      <button @click="tryMove(0, 1)" class="right">→</button>
+    </div>
+  </div>
 </template>
+
+<style scoped>
+.canvas-wrap {
+  display: flex;
+  justify-content: center;
+}
+.canvas-wrap canvas {
+  border: 2px solid black;
+  max-width: 100%;
+  height: auto;
+}
+.touch-controls {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  margin-top: 16px;
+}
+.middle-row {
+  display: flex;
+  gap: 8px;
+}
+.touch-controls button {
+  width: 56px;
+  height: 56px;
+  font-size: 24px;
+  border-radius: 8px;
+  border: 1px solid #2a3340;
+  background: #e8e8e8;
+  touch-action: manipulation;
+}
+</style>
