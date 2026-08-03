@@ -12,6 +12,8 @@ export function useMazeGame() {
   const currentLevel = ref(null)
   const player = ref({ row: 0, col: 0, facingLeft: false })
   const enemy = ref(null)
+  const floodPercent = ref(0)
+  const caughtMessage = ref('')
   let enemyIntervalId = null
 
   const playerImg = new Image()
@@ -36,6 +38,7 @@ export function useMazeGame() {
     currentLevel.value ? currentLevel.value.maze.length * CELL : 320
   )
 
+  // ---------- Maze generation ----------
   function generateMaze(roomsWide, roomsHigh) {
     const width = roomsWide * 2 + 1
     const height = roomsHigh * 2 + 1
@@ -119,11 +122,70 @@ export function useMazeGame() {
     return path
   }
 
+  function collectFloorCells(maze) {
+    const cells = []
+    for (let r = 0; r < maze.length; r++) {
+      for (let c = 0; c < maze[r].length; c++) {
+        if (maze[r][c] === 0) cells.push({ row: r, col: c })
+      }
+    }
+    return cells
+  }
+
+  // The maze is a perfect maze (no loops), so there is exactly one route
+  // between any two cells. If the guardian patrolled start->exit directly it
+  // would always occupy the player's only path with no way around it. Instead
+  // it patrols a random stretch of corridor, so it may or may not overlap the
+  // critical path, and the player gets real chances to time a dodge.
   function pickEnemyPatrol(level) {
-    const path = findPath(level.maze, level.start, level.exit)
+    const floorCells = collectFloorCells(level.maze)
+    let path = []
+    let attempts = 0
+    while (path.length < 4 && attempts < 20) {
+      const a = floorCells[Math.floor(Math.random() * floorCells.length)]
+      const b = floorCells[Math.floor(Math.random() * floorCells.length)]
+      path = findPath(level.maze, a, b)
+      attempts++
+    }
+    if (path.length < 2) path = findPath(level.maze, level.start, level.exit)
     return { path, pathIndex: 0, direction: 1 }
   }
 
+  // ---------- Flood mechanic ----------
+  // Water rises from the bottom of the maze (near the exit) toward the top.
+  // Each level it rises faster, so later levels demand a faster escape.
+  // A short grace period at level start gives the player time to get moving
+  // before the water starts climbing.
+  const FLOOD_START_DELAY_MS = 2500
+  const BASE_RISE_MS_PER_ROW = 2600
+  const MIN_RISE_MS_PER_ROW = 1000
+  let levelStartTime = 0
+  let invulnerableUntil = 0
+
+  function riseMsPerRow() {
+    return Math.max(MIN_RISE_MS_PER_ROW, BASE_RISE_MS_PER_ROW - currentLevelIndex.value * 70)
+  }
+
+  // Returns a fractional row index: rows <= this value are underwater.
+  // The flood rises from the start side (top) toward the exit (bottom), so
+  // it pressures forward progress instead of drowning the goal first.
+  function floodFrontRow(level, timestamp) {
+    const elapsed = Math.max(0, timestamp - levelStartTime - FLOOD_START_DELAY_MS)
+    return -1 + elapsed / riseMsPerRow()
+  }
+
+  function triggerCaught(reason, timestamp) {
+    if (timestamp < invulnerableUntil) return
+    invulnerableUntil = timestamp + 900
+    caughtMessage.value = reason === 'flood' ? 'Swallowed by the flood' : 'Spotted by the guardian'
+    resetPositions(currentLevel.value)
+    levelStartTime = timestamp
+    setTimeout(() => {
+      caughtMessage.value = ''
+    }, 1100)
+  }
+
+  // ---------- Level lifecycle ----------
   function loadLevel(index) {
     const roomsWide = 4 + index
     const roomsHigh = 4 + index
@@ -131,11 +193,13 @@ export function useMazeGame() {
 
     currentLevel.value = level
     resetPositions(level)
+    levelStartTime = performance.now()
+    invulnerableUntil = 0
+    floodPercent.value = 0
 
     requestAnimationFrame(() => {
       canvasEl.value.width = canvasWidth.value
       canvasEl.value.height = canvasHeight.value
-      drawMaze()
     })
 
     startEnemyLoop()
@@ -156,7 +220,8 @@ export function useMazeGame() {
 
   function startEnemyLoop() {
     if (enemyIntervalId) clearInterval(enemyIntervalId)
-    enemyIntervalId = setInterval(moveEnemy, 700)
+    const speed = Math.max(320, 700 - currentLevelIndex.value * 40)
+    enemyIntervalId = setInterval(moveEnemy, speed)
   }
 
   function moveEnemy() {
@@ -178,23 +243,28 @@ export function useMazeGame() {
     e.col = step.col
     if (e.col !== prevCol) e.facingLeft = e.col < prevCol
 
-    drawMaze()
-    checkEnemyCollision()
-  }
-
-  function checkEnemyCollision() {
-    if (enemy.value.row === player.value.row && enemy.value.col === player.value.col) {
-      alert('Caught! Restarting the level.')
-      resetPositions(currentLevel.value)
-      drawMaze()
+    if (e.row === player.value.row && e.col === player.value.col) {
+      triggerCaught('guardian', performance.now())
     }
   }
 
-  function drawSprite(img, row, col, facingLeft) {
+  // ---------- Rendering ----------
+  function drawSprite(img, row, col, facingLeft, glowColor, timestamp) {
     const centerX = col * CELL + CELL / 2
     const centerY = row * CELL + CELL / 2
     const x = centerX - SPRITE_SIZE / 2
     const y = centerY - SPRITE_SIZE / 2
+    const pulse = 8 + Math.sin(timestamp / 220) * 4
+
+    ctx.save()
+    ctx.globalAlpha = 0.28
+    ctx.shadowColor = glowColor
+    ctx.shadowBlur = pulse + 6
+    ctx.fillStyle = glowColor
+    ctx.beginPath()
+    ctx.arc(centerX, centerY, SPRITE_SIZE / 2 + pulse / 2, 0, Math.PI * 2)
+    ctx.fill()
+    ctx.restore()
 
     ctx.save()
     if (facingLeft) {
@@ -207,38 +277,130 @@ export function useMazeGame() {
     ctx.restore()
   }
 
-  function drawMaze() {
+  // Draws the glowing edge on every wall cell. brightness > 1 is used to punch
+  // the outline back through the translucent flood overlay so paths stay readable
+  // even once that part of the maze is underwater.
+  function drawWallEdges(timestamp, brightness) {
     const level = currentLevel.value
+    for (let row = 0; row < level.maze.length; row++) {
+      for (let col = 0; col < level.maze[row].length; col++) {
+        if (level.maze[row][col] !== 1) continue
+        const x = col * CELL
+        const y = row * CELL
+        const flicker = 0.35 + Math.abs(Math.sin(timestamp / 900 + row * 3 + col * 7)) * 0.2
+        ctx.strokeStyle = `rgba(45, 245, 201, ${Math.min(1, flicker * brightness)})`
+        ctx.lineWidth = 2
+        ctx.strokeRect(x + 2, y + 2, CELL - 4, CELL - 4)
+      }
+    }
+  }
+
+  function drawMaze(timestamp) {
+    const level = currentLevel.value
+    if (!level || !ctx) return
+
+    ctx.fillStyle = '#0a0e14'
+    ctx.fillRect(0, 0, canvasWidth.value, canvasHeight.value)
 
     for (let row = 0; row < level.maze.length; row++) {
       for (let col = 0; col < level.maze[row].length; col++) {
-        ctx.fillStyle = level.maze[row][col] === 1 ? '#2a3340' : '#e8e8e8'
-        ctx.fillRect(col * CELL, row * CELL, CELL, CELL)
+        const x = col * CELL
+        const y = row * CELL
+        if (level.maze[row][col] === 1) {
+          // Walls: near-black block, so they read as solid mass at a glance.
+          ctx.fillStyle = '#04070a'
+          ctx.fillRect(x, y, CELL, CELL)
+        } else {
+          // Floor: clearly lighter slate, with a faint dot to suggest open ground.
+          ctx.fillStyle = '#232f42'
+          ctx.fillRect(x, y, CELL, CELL)
+          ctx.fillStyle = 'rgba(216, 228, 232, 0.08)'
+          ctx.beginPath()
+          ctx.arc(x + CELL / 2, y + CELL / 2, 2, 0, Math.PI * 2)
+          ctx.fill()
+        }
       }
     }
 
-    ctx.fillStyle = 'green'
-    ctx.fillRect(level.exit.col * CELL + 8, level.exit.row * CELL + 8, CELL - 16, CELL - 16)
+    drawWallEdges(timestamp, 1)
 
-    if (enemy.value) {
-      drawSprite(enemyImg, enemy.value.row, enemy.value.col, enemy.value.facingLeft)
+    // exit rune
+    const exitX = level.exit.col * CELL + CELL / 2
+    const exitY = level.exit.row * CELL + CELL / 2
+    const exitPulse = 10 + Math.sin(timestamp / 260) * 4
+    ctx.save()
+    ctx.shadowColor = '#2df5c9'
+    ctx.shadowBlur = exitPulse
+    ctx.fillStyle = '#2df5c9'
+    ctx.beginPath()
+    ctx.arc(exitX, exitY, CELL / 2 - 8, 0, Math.PI * 2)
+    ctx.fill()
+    ctx.restore()
+
+    // flood
+    const front = floodFrontRow(level, timestamp)
+    floodPercent.value = Math.max(0, Math.min(100, Math.round(((front + 1) / level.maze.length) * 100)))
+
+    const floodBoundaryY = (front + 1) * CELL
+    if (floodBoundaryY > 0) {
+      ctx.save()
+      ctx.globalAlpha = 0.4
+      const gradient = ctx.createLinearGradient(0, 0, 0, floodBoundaryY)
+      gradient.addColorStop(0, '#7b2ff7')
+      gradient.addColorStop(1, '#0dd3c4')
+      ctx.fillStyle = gradient
+      ctx.fillRect(0, 0, canvasWidth.value, floodBoundaryY)
+      ctx.restore()
+
+      ctx.save()
+      ctx.strokeStyle = '#7ffcec'
+      ctx.lineWidth = 2
+      ctx.shadowColor = '#2df5c9'
+      ctx.shadowBlur = 10
+      ctx.beginPath()
+      for (let x = 0; x <= canvasWidth.value; x += 6) {
+        const wave = Math.sin(x / 22 + timestamp / 260) * 3
+        const yy = floodBoundaryY + wave
+        if (x === 0) ctx.moveTo(x, yy)
+        else ctx.lineTo(x, yy)
+      }
+      ctx.stroke()
+      ctx.restore()
+
+      // Boosted wall outlines punch back through the water tint.
+      ctx.save()
+      ctx.beginPath()
+      ctx.rect(0, 0, canvasWidth.value, floodBoundaryY)
+      ctx.clip()
+      drawWallEdges(timestamp, 1.8)
+      ctx.restore()
     }
 
-    drawSprite(playerImg, player.value.row, player.value.col, player.value.facingLeft)
+    if (enemy.value) {
+      drawSprite(enemyImg, enemy.value.row, enemy.value.col, enemy.value.facingLeft, '#ff5f3a', timestamp)
+    }
+    drawSprite(playerImg, player.value.row, player.value.col, player.value.facingLeft, '#2df5c9', timestamp)
+
+    if (timestamp >= invulnerableUntil && player.value.row <= front) {
+      triggerCaught('flood', timestamp)
+    }
   }
 
   function tryMove(deltaRow, deltaCol) {
     const level = currentLevel.value
+    if (!level) return
     const newRow = player.value.row + deltaRow
     const newCol = player.value.col + deltaCol
 
     if (level.maze[newRow] && level.maze[newRow][newCol] === 0) {
       if (deltaCol !== 0) player.value.facingLeft = deltaCol < 0
-
       player.value.row = newRow
       player.value.col = newCol
-      drawMaze()
-      checkEnemyCollision()
+
+      if (enemy.value && enemy.value.row === newRow && enemy.value.col === newCol) {
+        triggerCaught('guardian', performance.now())
+        return
+      }
 
       if (player.value.row === level.exit.row && player.value.col === level.exit.col) {
         goToNextLevel()
@@ -315,15 +477,29 @@ export function useMazeGame() {
     knobPosition.value = { x: 0, y: 0 }
   }
 
+  // ---------- Game loop ----------
+  let running = false
+  let animFrameId = null
+
+  function loop(timestamp) {
+    if (!running) return
+    drawMaze(timestamp)
+    animFrameId = requestAnimationFrame(loop)
+  }
+
   function startGame() {
     ctx = canvasEl.value.getContext('2d')
     loadImages(() => {
       loadLevel(currentLevelIndex.value)
       window.addEventListener('keydown', handleKeydown)
+      running = true
+      animFrameId = requestAnimationFrame(loop)
     })
   }
 
   function stopGame() {
+    running = false
+    if (animFrameId) cancelAnimationFrame(animFrameId)
     if (enemyIntervalId) clearInterval(enemyIntervalId)
     if (joystickMoveIntervalId) clearInterval(joystickMoveIntervalId)
     window.removeEventListener('keydown', handleKeydown)
@@ -332,6 +508,8 @@ export function useMazeGame() {
   return {
     canvasEl,
     currentLevelIndex,
+    floodPercent,
+    caughtMessage,
     joystickBase,
     knobPosition,
     tryMove,
