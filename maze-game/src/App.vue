@@ -155,7 +155,7 @@ function resetPositions(level) {
 
 function startEnemyLoop() {
   if (enemyIntervalId) clearInterval(enemyIntervalId)
-  enemyIntervalId = setInterval(moveEnemy, 400)
+  enemyIntervalId = setInterval(moveEnemy, 700)
 }
 
 function moveEnemy() {
