@@ -260,6 +260,70 @@ function handleKeydown(event) {
   else if (event.key === 'ArrowRight') tryMove(0, 1)
 }
 
+// ---------- Virtual joystick ----------
+const joystickBase = ref(null)
+const knobPosition = ref({ x: 0, y: 0 })
+
+let joystickCenter = { x: 0, y: 0 }
+let currentDirection = { row: 0, col: 0 }
+let joystickMoveIntervalId = null
+const JOYSTICK_RADIUS = 50
+const DEAD_ZONE = 15
+
+function handleJoystickStart(event) {
+  const rect = joystickBase.value.getBoundingClientRect()
+  joystickCenter = {
+    x: rect.left + rect.width / 2,
+    y: rect.top + rect.height / 2,
+  }
+  updateJoystick(event)
+
+  if (joystickMoveIntervalId) clearInterval(joystickMoveIntervalId)
+  joystickMoveIntervalId = setInterval(() => {
+    if (currentDirection.row !== 0 || currentDirection.col !== 0) {
+      tryMove(currentDirection.row, currentDirection.col)
+    }
+  }, 200)
+}
+
+function handleJoystickMove(event) {
+  updateJoystick(event)
+}
+
+function updateJoystick(event) {
+  const touch = event.touches ? event.touches[0] : event
+  const deltaX = touch.clientX - joystickCenter.x
+  const deltaY = touch.clientY - joystickCenter.y
+
+  const distance = Math.min(Math.hypot(deltaX, deltaY), JOYSTICK_RADIUS)
+  const angle = Math.atan2(deltaY, deltaX)
+
+  knobPosition.value = {
+    x: Math.cos(angle) * distance,
+    y: Math.sin(angle) * distance,
+  }
+
+  if (distance < DEAD_ZONE) {
+    currentDirection = { row: 0, col: 0 }
+    return
+  }
+
+  if (Math.abs(deltaX) > Math.abs(deltaY)) {
+    currentDirection = deltaX > 0 ? { row: 0, col: 1 } : { row: 0, col: -1 }
+  } else {
+    currentDirection = deltaY > 0 ? { row: 1, col: 0 } : { row: -1, col: 0 }
+  }
+}
+
+function handleJoystickEnd() {
+  if (joystickMoveIntervalId) {
+    clearInterval(joystickMoveIntervalId)
+    joystickMoveIntervalId = null
+  }
+  currentDirection = { row: 0, col: 0 }
+  knobPosition.value = { x: 0, y: 0 }
+}
+
 onMounted(() => {
   ctx = canvasEl.value.getContext('2d')
   loadImages(() => {
@@ -270,6 +334,7 @@ onMounted(() => {
 
 onUnmounted(() => {
   if (enemyIntervalId) clearInterval(enemyIntervalId)
+  if (joystickMoveIntervalId) clearInterval(joystickMoveIntervalId)
   window.removeEventListener('keydown', handleKeydown)
 })
 </script>
@@ -281,13 +346,21 @@ onUnmounted(() => {
     <canvas ref="canvasEl"></canvas>
   </div>
 
-  <div class="touch-controls">
-    <button @click="tryMove(-1, 0)" class="up">↑</button>
-    <div class="middle-row">
-      <button @click="tryMove(0, -1)" class="left">←</button>
-      <button @click="tryMove(1, 0)" class="down">↓</button>
-      <button @click="tryMove(0, 1)" class="right">→</button>
-    </div>
+  <div
+    class="joystick-base"
+    ref="joystickBase"
+    @touchstart.prevent="handleJoystickStart"
+    @touchmove.prevent="handleJoystickMove"
+    @touchend.prevent="handleJoystickEnd"
+    @mousedown="handleJoystickStart"
+    @mousemove="handleJoystickMove"
+    @mouseup="handleJoystickEnd"
+    @mouseleave="handleJoystickEnd"
+  >
+    <div
+      class="joystick-knob"
+      :style="{ transform: `translate(${knobPosition.x}px, ${knobPosition.y}px)` }"
+    ></div>
   </div>
 </template>
 
@@ -301,24 +374,24 @@ onUnmounted(() => {
   max-width: 100%;
   height: auto;
 }
-.touch-controls {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
-  margin-top: 16px;
+.joystick-base {
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  background: rgba(42, 51, 64, 0.15);
+  border: 2px solid rgba(42, 51, 64, 0.3);
+  margin: 24px auto;
+  position: relative;
+  touch-action: none;
 }
-.middle-row {
-  display: flex;
-  gap: 8px;
-}
-.touch-controls button {
-  width: 56px;
-  height: 56px;
-  font-size: 24px;
-  border-radius: 8px;
-  border: 1px solid #2a3340;
-  background: #e8e8e8;
-  touch-action: manipulation;
+.joystick-knob {
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  background: #2a3340;
+  position: absolute;
+  top: 35px;
+  left: 35px;
+  transition: transform 0.05s linear;
 }
 </style>
