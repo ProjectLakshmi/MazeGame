@@ -152,11 +152,7 @@ export function useMazeGame() {
     return cells
   }
 
-  // The maze is a perfect maze (no loops), so there is exactly one route
-  // between any two cells. If the guardian patrolled start->exit directly it
-  // would always occupy the player's only path with no way around it. Instead
-  // it patrols a random stretch of corridor, so it may or may not overlap the
-  // critical path, and the player gets real chances to time a dodge.
+
   function pickEnemyPatrol(level) {
     const floorCells = collectFloorCells(level.maze)
     let path = []
@@ -511,7 +507,7 @@ export function useMazeGame() {
       if (currentDirection.row !== 0 || currentDirection.col !== 0) {
         tryMove(currentDirection.row, currentDirection.col)
       }
-    }, 200)
+    }, 130)
   }
 
   function handleJoystickMove(event) {
