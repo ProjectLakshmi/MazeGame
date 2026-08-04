@@ -6,14 +6,20 @@ export function useMazeGame() {
   let ctx = null
   const canvasEl = ref(null)
 
+  const moveCount = ref(0)
+  const levelstartTime = ref(0)
+  const elapsedTime = ref(0)
+
   const CELL = 40
   const SPRITE_SIZE = 32
+  const TOTAL_LEVELS = 12
   const currentLevelIndex = ref(0)
   const currentLevel = ref(null)
   const player = ref({ row: 0, col: 0, facingLeft: false })
   const enemy = ref(null)
   const floodPercent = ref(0)
   const caughtMessage = ref('')
+  const levelCompleteInfo = ref(null) // null, or { levelIndex, stars, moves, seconds }
   let enemyIntervalId = null
 
   const playerImg = new Image()
@@ -38,8 +44,22 @@ export function useMazeGame() {
     currentLevel.value ? currentLevel.value.maze.length * CELL : 320
   )
 
+  // A small seeded RNG (mulberry32) — the same seed always produces the same
+  // sequence of "random" numbers, unlike Math.random(). This is what lets a
+  // level regenerate the identical maze every time it's replayed, so star
+  // ratings are actually comparing the same challenge, not a new one.
+  function mulberry32(seed) {
+    return function () {
+      seed |= 0
+      seed = (seed + 0x6D2B79F5) | 0
+      let t = Math.imul(seed ^ (seed >>> 15), 1 | seed)
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296
+    }
+  }
+
   // ---------- Maze generation ----------
-  function generateMaze(roomsWide, roomsHigh) {
+  function generateMaze(roomsWide, roomsHigh, rng = Math.random) {
     const width = roomsWide * 2 + 1
     const height = roomsHigh * 2 + 1
 
@@ -58,7 +78,7 @@ export function useMazeGame() {
       maze[roomRow * 2 + 1][roomCol * 2 + 1] = 0
 
       const directions = [[-1, 0], [1, 0], [0, -1], [0, 1]]
-      directions.sort(() => Math.random() - 0.5)
+      directions.sort(() => rng() - 0.5)
 
       for (const [dRow, dCol] of directions) {
         const nextRow = roomRow + dRow
@@ -152,10 +172,6 @@ export function useMazeGame() {
   }
 
   // ---------- Flood mechanic ----------
-  // Water rises from the bottom of the maze (near the exit) toward the top.
-  // Each level it rises faster, so later levels demand a faster escape.
-  // A short grace period at level start gives the player time to get moving
-  // before the water starts climbing.
   const FLOOD_START_DELAY_MS = 2500
   const BASE_RISE_MS_PER_ROW = 2600
   const MIN_RISE_MS_PER_ROW = 1000
@@ -166,9 +182,6 @@ export function useMazeGame() {
     return Math.max(MIN_RISE_MS_PER_ROW, BASE_RISE_MS_PER_ROW - currentLevelIndex.value * 70)
   }
 
-  // Returns a fractional row index: rows <= this value are underwater.
-  // The flood rises from the start side (top) toward the exit (bottom), so
-  // it pressures forward progress instead of drowning the goal first.
   function floodFrontRow(level, timestamp) {
     const elapsed = Math.max(0, timestamp - levelStartTime - FLOOD_START_DELAY_MS)
     return -1 + elapsed / riseMsPerRow()
@@ -187,9 +200,12 @@ export function useMazeGame() {
 
   // ---------- Level lifecycle ----------
   function loadLevel(index) {
+    moveCount.value = 0
+    levelstartTime.value = Date.now()
     const roomsWide = 4 + index
     const roomsHigh = 4 + index
-    const level = generateMaze(roomsWide, roomsHigh)
+    const rng = mulberry32(index + 1) // seed tied to level number = same maze every replay
+    const level = generateMaze(roomsWide, roomsHigh, rng)
 
     currentLevel.value = level
     resetPositions(level)
@@ -277,9 +293,6 @@ export function useMazeGame() {
     ctx.restore()
   }
 
-  // Draws the glowing edge on every wall cell. brightness > 1 is used to punch
-  // the outline back through the translucent flood overlay so paths stay readable
-  // even once that part of the maze is underwater.
   function drawWallEdges(timestamp, brightness) {
     const level = currentLevel.value
     for (let row = 0; row < level.maze.length; row++) {
@@ -307,11 +320,9 @@ export function useMazeGame() {
         const x = col * CELL
         const y = row * CELL
         if (level.maze[row][col] === 1) {
-          // Walls: near-black block, so they read as solid mass at a glance.
           ctx.fillStyle = '#04070a'
           ctx.fillRect(x, y, CELL, CELL)
         } else {
-          // Floor: clearly lighter slate, with a faint dot to suggest open ground.
           ctx.fillStyle = '#232f42'
           ctx.fillRect(x, y, CELL, CELL)
           ctx.fillStyle = 'rgba(216, 228, 232, 0.08)'
@@ -324,7 +335,6 @@ export function useMazeGame() {
 
     drawWallEdges(timestamp, 1)
 
-    // exit rune
     const exitX = level.exit.col * CELL + CELL / 2
     const exitY = level.exit.row * CELL + CELL / 2
     const exitPulse = 10 + Math.sin(timestamp / 260) * 4
@@ -337,7 +347,6 @@ export function useMazeGame() {
     ctx.fill()
     ctx.restore()
 
-    // flood
     const front = floodFrontRow(level, timestamp)
     floodPercent.value = Math.max(0, Math.min(100, Math.round(((front + 1) / level.maze.length) * 100)))
 
@@ -367,7 +376,6 @@ export function useMazeGame() {
       ctx.stroke()
       ctx.restore()
 
-      // Boosted wall outlines punch back through the water tint.
       ctx.save()
       ctx.beginPath()
       ctx.rect(0, 0, canvasWidth.value, floodBoundaryY)
@@ -388,7 +396,7 @@ export function useMazeGame() {
 
   function tryMove(deltaRow, deltaCol) {
     const level = currentLevel.value
-    if (!level) return
+    if (!level || levelCompleteInfo.value) return // freeze input while the complete modal is up
     const newRow = player.value.row + deltaRow
     const newCol = player.value.col + deltaCol
 
@@ -396,15 +404,66 @@ export function useMazeGame() {
       if (deltaCol !== 0) player.value.facingLeft = deltaCol < 0
       player.value.row = newRow
       player.value.col = newCol
-
+      moveCount.value++
       if (enemy.value && enemy.value.row === newRow && enemy.value.col === newCol) {
         triggerCaught('guardian', performance.now())
         return
       }
 
       if (player.value.row === level.exit.row && player.value.col === level.exit.col) {
-        goToNextLevel()
+        const seconds = (Date.now() - levelstartTime.value) / 1000
+        const stars = calculateStars(moveCount.value, seconds, level.maze.length)
+        saveLevelResult(currentLevelIndex.value, stars, moveCount.value, seconds)
+
+        // Freeze the world while the modal is shown — stop the enemy timer
+        // and the render loop, so the flood doesn't keep rising behind it.
+        if (enemyIntervalId) clearInterval(enemyIntervalId)
+        running = false
+        if (animFrameId) cancelAnimationFrame(animFrameId)
+
+        levelCompleteInfo.value = {
+          levelIndex: currentLevelIndex.value,
+          stars,
+          moves: moveCount.value,
+          seconds,
+        }
       }
+    }
+  }
+
+  function calculateStars(moves, seconds, mazeSize) {
+    const perMoves = mazeSize * 2
+    if (moves <= perMoves && seconds < 20) return 3
+    if (moves <= perMoves * 1.5) return 2
+    return 1
+  }
+
+  function saveLevelResult(levelIndex, stars, moves, seconds) {
+    const results = JSON.parse(localStorage.getItem('mazeResults') || '{}')
+    const existing = results[levelIndex]
+    if (!existing || stars > existing.stars) {
+      results[levelIndex] = { stars, moves, seconds }
+      localStorage.setItem('mazeResults', JSON.stringify(results))
+    }
+  }
+
+  function getLevelResults() {
+    return JSON.parse(localStorage.getItem('mazeResults') || '{}')
+  }
+
+  function isLevelUnlocked(index) {
+    if (index === 0) return true
+    const results = getLevelResults()
+    return !!results[index - 1]
+  }
+
+  function continueToNextLevel() {
+    levelCompleteInfo.value = null
+    if (currentLevelIndex.value + 1 < TOTAL_LEVELS) {
+      currentLevelIndex.value++
+      loadLevel(currentLevelIndex.value)
+      running = true
+      animFrameId = requestAnimationFrame(loop)
     }
   }
 
@@ -487,7 +546,8 @@ export function useMazeGame() {
     animFrameId = requestAnimationFrame(loop)
   }
 
-  function startGame() {
+  function startGame(startIndex = 0) {
+    currentLevelIndex.value = startIndex
     ctx = canvasEl.value.getContext('2d')
     loadImages(() => {
       loadLevel(currentLevelIndex.value)
@@ -510,13 +570,18 @@ export function useMazeGame() {
     currentLevelIndex,
     floodPercent,
     caughtMessage,
+    levelCompleteInfo,
     joystickBase,
     knobPosition,
     tryMove,
     startGame,
     stopGame,
+    continueToNextLevel,
     handleJoystickStart,
     handleJoystickMove,
     handleJoystickEnd,
+    getLevelResults,
+    isLevelUnlocked,
+    TOTAL_LEVELS,
   }
 }

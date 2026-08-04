@@ -1,12 +1,59 @@
 <script setup>
-import { ref } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import HomeScreen from '@/components/HomeScreen.vue'
+import LevelScreen from '@/components/LevelScreen.vue'
 import GameScreen from '@/components/GameScreen.vue'
 
-const currentScreen = ref('home') // 'home' | 'game'
+const screenStack = ref(['home'])
+const selectedLevel = ref(0)
+
+const currentScreen = computed(() => screenStack.value[screenStack.value.length - 1])
+
+function goTo(screen) {
+  screenStack.value.push(screen)
+  history.pushState({ screenIndex: screenStack.value.length - 1 }, '')
+}
+
+
+function goBack() {
+  if (screenStack.value.length > 1) {
+    screenStack.value.pop()
+    history.back() 
+  }
+}
+
+function handlePopState() {
+  if (screenStack.value.length > 1) {
+    screenStack.value.pop()
+  }
+}
+
+function startLevel(index) {
+  selectedLevel.value = index
+  goTo('game')
+}
+
+onMounted(() => {
+ 
+  history.replaceState({ screenIndex: 0 }, '')
+  window.addEventListener('popstate', handlePopState)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('popstate', handlePopState)
+})
 </script>
 
 <template>
-  <HomeScreen v-if="currentScreen === 'home'" @start="currentScreen = 'game'" />
-  <GameScreen v-else />
+  <HomeScreen v-if="currentScreen === 'home'" @start="goTo('levelSelect')" />
+  <LevelScreen
+    v-else-if="currentScreen === 'levelSelect'"
+    @selectLevel="startLevel"
+    @back="goBack"
+  />
+  <GameScreen
+    v-else
+    :startLevel="selectedLevel"
+    @backToLevelSelect="goBack"
+  />
 </template>
