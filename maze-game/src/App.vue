@@ -17,7 +17,6 @@ function goTo(screen) {
 
 function goBack() {
   if (screenStack.value.length > 1) {
-    screenStack.value.pop()
     history.back() 
   }
 }

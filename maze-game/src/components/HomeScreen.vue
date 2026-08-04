@@ -5,13 +5,19 @@ const emit = defineEmits(['start'])
 
 const showHowToPlay = ref(false)
 const difficulty = ref('normal')
-const bestLevel = ref(Number(localStorage.getItem('mazeBestLevel')) || 0)
+const bestLevel = ref(getBestLevelReached())
 
 const difficulties = [
   { id: 'easy', label: 'Easy', note: 'Smaller mazes, slower patrol' },
   { id: 'normal', label: 'Normal', note: 'Balanced' },
   { id: 'hard', label: 'Hard', note: 'Larger mazes, faster patrol' },
 ]
+function getBestLevelReached() {
+  const results = JSON.parse(localStorage.getItem('mazeResults') || '{}')
+  const completedIndexes = Object.keys(results).map(Number)
+  if (completedIndexes.length === 0) return 0
+  return Math.max(...completedIndexes) + 1 // +1 since indexes are 0-based, display is 1-based
+}
 
 function handleStart() {
   emit('start', difficulty.value)

@@ -415,8 +415,7 @@ export function useMazeGame() {
         const stars = calculateStars(moveCount.value, seconds, level.maze.length)
         saveLevelResult(currentLevelIndex.value, stars, moveCount.value, seconds)
 
-        // Freeze the world while the modal is shown — stop the enemy timer
-        // and the render loop, so the flood doesn't keep rising behind it.
+        
         if (enemyIntervalId) clearInterval(enemyIntervalId)
         running = false
         if (animFrameId) cancelAnimationFrame(animFrameId)
