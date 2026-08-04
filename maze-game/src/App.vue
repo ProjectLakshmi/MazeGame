@@ -21,9 +21,10 @@ function goBack() {
   }
 }
 
-function handlePopState() {
-  if (screenStack.value.length > 1) {
-    screenStack.value.pop()
+function handlePopState(event) {
+  const targetIndex = event.state?.screenIndex ?? 0
+  if (targetIndex < screenStack.value.length - 1) {
+    screenStack.value = screenStack.value.slice(0, targetIndex + 1)
   }
 }
 
