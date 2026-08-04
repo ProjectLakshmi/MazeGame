@@ -164,6 +164,8 @@ export function useMazeGame() {
     while (path.length < 4 && attempts < 20) {
       const a = floorCells[Math.floor(Math.random() * floorCells.length)]
       const b = floorCells[Math.floor(Math.random() * floorCells.length)]
+    const distFromStart = Math.abs(a.row - level.start.row) + Math.abs(a.col - level.start.col)
+    if (distFromStart < 3) { attempts++; continue }
       path = findPath(level.maze, a, b)
       attempts++
     }
@@ -175,11 +177,14 @@ export function useMazeGame() {
   const FLOOD_START_DELAY_MS = 2500
   const BASE_RISE_MS_PER_ROW = 2600
   const MIN_RISE_MS_PER_ROW = 1000
+  const MOVE_TIME_BUDGET_MS =260
+  const ENEMY_DODGE_BUFFER_MS = 4000
+  let currentRiseMsPerRow = BASE_RISE_MS_PER_ROW
   let levelStartTime = 0
   let invulnerableUntil = 0
 
   function riseMsPerRow() {
-    return Math.max(MIN_RISE_MS_PER_ROW, BASE_RISE_MS_PER_ROW - currentLevelIndex.value * 70)
+    return currentRiseMsPerRow
   }
 
   function floodFrontRow(level, timestamp) {
@@ -212,6 +217,15 @@ export function useMazeGame() {
     levelStartTime = performance.now()
     invulnerableUntil = 0
     floodPercent.value = 0
+
+  const shortestPath = findPath(level.maze, level.start, level.exit)
+  const pathMoves = Math.max(1, shortestPath.length - 1)
+  const dodgeBuffer = ENEMY_DODGE_BUFFER_MS * (1 + index * 0.1)
+  const requiredSafeMs = pathMoves * MOVE_TIME_BUDGET_MS + dodgeBuffer
+  const minSafeRiseMsPerRow = (requiredSafeMs - FLOOD_START_DELAY_MS) / level.exit.row
+
+  const difficultyRiseMsPerRow = Math.max(MIN_RISE_MS_PER_ROW, BASE_RISE_MS_PER_ROW - index * 70)
+  currentRiseMsPerRow = Math.max(difficultyRiseMsPerRow, minSafeRiseMsPerRow)
 
     requestAnimationFrame(() => {
       canvasEl.value.width = canvasWidth.value
