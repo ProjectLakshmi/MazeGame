@@ -493,9 +493,10 @@ export function useMazeGame() {
   const knobPosition = ref({ x: 0, y: 0 })
   let joystickCenter = { x: 0, y: 0 }
   let currentDirection = { row: 0, col: 0 }
+  let lastMovedDirection = { row: 0, col: 0 }
   let joystickMoveIntervalId = null
   const JOYSTICK_RADIUS = 50
-  const DEAD_ZONE = 15
+  const DEAD_ZONE = 6
 
   function handleJoystickStart(event) {
     const rect = joystickBase.value.getBoundingClientRect()
@@ -529,11 +530,19 @@ export function useMazeGame() {
       return
     }
 
-    if (Math.abs(deltaX) > Math.abs(deltaY)) {
-      currentDirection = deltaX > 0 ? { row: 0, col: 1 } : { row: 0, col: -1 }
-    } else {
-      currentDirection = deltaY > 0 ? { row: 1, col: 0 } : { row: -1, col: 0 }
-    }
+   const newDirection =
+    Math.abs(deltaX) > Math.abs(deltaY)
+      ? (deltaX > 0 ? { row: 0, col: 1 } : { row: 0, col: -1 })
+      : (deltaY > 0 ? { row: 1, col: 0 } : { row: -1, col: 0 })
+
+  currentDirection = newDirection
+
+  const directionChanged =
+    newDirection.row !== lastMovedDirection.row || newDirection.col !== lastMovedDirection.col
+  if (directionChanged) {
+    tryMove(newDirection.row, newDirection.col)
+    lastMovedDirection = { ...newDirection }
+  }
   }
 
   function handleJoystickEnd() {
@@ -542,6 +551,7 @@ export function useMazeGame() {
       joystickMoveIntervalId = null
     }
     currentDirection = { row: 0, col: 0 }
+     lastMovedDirection = { row: 0, col: 0 }
     knobPosition.value = { x: 0, y: 0 }
   }
 
