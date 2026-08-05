@@ -1,10 +1,12 @@
 <script setup>
 import { ref, onMounted, onUnmounted } from 'vue'
+import { useSaveData } from '@/composables/useSaveData'
 
-const emit = defineEmits(['start'])
+const emit = defineEmits(['start','settings'])
 
 const showHowToPlay = ref(false)
 const difficulty = ref('normal')
+const { getBestLevelReached } = useSaveData()
 const bestLevel = ref(getBestLevelReached())
 
 const difficulties = [
@@ -12,12 +14,6 @@ const difficulties = [
   { id: 'normal', label: 'Normal', note: 'Balanced' },
   { id: 'hard', label: 'Hard', note: 'Larger mazes, faster patrol' },
 ]
-function getBestLevelReached() {
-  const results = JSON.parse(localStorage.getItem('mazeResults') || '{}')
-  const completedIndexes = Object.keys(results).map(Number)
-  if (completedIndexes.length === 0) return 0
-  return Math.max(...completedIndexes) + 1 // +1 since indexes are 0-based, display is 1-based
-}
 
 function handleStart() {
   emit('start', difficulty.value)
@@ -114,7 +110,7 @@ onUnmounted(() => {
     </div>
 
     <button class="start-btn" @click="handleStart">Start Game</button>
-
+    <button class="settings-btn" @click="console.log('button clicked') ; $emit('settings')">⚙ Settings</button>
     <button class="howto-toggle" @click="showHowToPlay = !showHowToPlay">
       {{ showHowToPlay ? 'Hide instructions' : 'How to play' }}
     </button>

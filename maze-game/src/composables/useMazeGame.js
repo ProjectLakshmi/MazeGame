@@ -1,10 +1,13 @@
 import { ref, computed } from 'vue'
 import playerSprite from '@/asset/player.png'
 import enemySprite from '@/asset/enemy.png'
+import {useSaveData} from '@/composables/useSaveData.js'
 
 export function useMazeGame() {
   let ctx = null
   const canvasEl = ref(null)
+
+  const {getSettings, saveSettings, getProgress, saveLevelProgress} = useSaveData()
 
   const moveCount = ref(0)
   const levelstartTime = ref(0)
@@ -428,7 +431,7 @@ if (floodPercent.value >= 70 && !floodWarningPlayed) {
       if (player.value.row === level.exit.row && player.value.col === level.exit.col) {
         const seconds = (Date.now() - levelstartTime.value) / 1000
         const stars = calculateStars(moveCount.value, seconds, level.maze.length)
-        saveLevelResult(currentLevelIndex.value, stars, moveCount.value, seconds)
+        saveLevelProgress(currentLevelIndex.value, stars, moveCount.value, seconds)
         playLevelCompleteSound()
 
         
@@ -445,6 +448,14 @@ if (floodPercent.value >= 70 && !floodWarningPlayed) {
       }
     }
   }
+  function isLevelUnlocked(index) {
+    if (index === 0) return true
+    const progress = getProgress()
+    return !!progress[index - 1]
+  }
+  function getLevelResultsCompat() {
+  return getProgress()
+}
 
   function calculateStars(moves, seconds, mazeSize) {
     const perMoves = mazeSize * 2
@@ -591,7 +602,7 @@ if (floodPercent.value >= 70 && !floodWarningPlayed) {
   }
   // ---------- Sound ----------
 
-const soundEnabled = ref(localStorage.getItem('mazeSoundEnabled') !== 'false')
+const soundEnabled = ref(getSettings().soundEnabled)
 let audioCtx = null
 
 function getAudioCtx() {
@@ -606,13 +617,15 @@ function getAudioCtx() {
 
 function toggleSound() {
   soundEnabled.value = !soundEnabled.value
-  localStorage.setItem('mazeSoundEnabled', soundEnabled.value)
+  saveSettings({...getSettings(), soundEnabled: soundEnabled.value })
 }
 
 // Plays a single tone. type = 'sine' (soft), 'square' (harsh), 'triangle' (mellow)
 function playTone(frequency, durationMs, type = 'sine', volume = 0.15) {
+ 
   if (!soundEnabled.value) return
   const ctx = getAudioCtx()
+  
   const oscillator = ctx.createOscillator()
   const gain = ctx.createGain()
 

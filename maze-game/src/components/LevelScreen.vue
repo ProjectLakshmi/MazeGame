@@ -1,13 +1,15 @@
 <script setup>
 import { computed } from 'vue'
 import { useMazeGame } from '@/composables/useMazeGame'
+import {useSaveData} from '@/composables/useSaveData'
 
 const emit = defineEmits(['selectLevel', 'back'])
 
 // We only need the read-only helpers here, not the full game state
-const { TOTAL_LEVELS, getLevelResults, isLevelUnlocked } = useMazeGame()
+const { TOTAL_LEVELS, isLevelUnlocked } = useMazeGame()
+const {getProgress} = useSaveData()
 
-const results = computed(() => getLevelResults())
+const results = computed(() => getProgress())
 const levels = computed(() =>
   Array.from({ length: TOTAL_LEVELS }, (_, i) => ({
     index: i,

@@ -3,6 +3,7 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import HomeScreen from '@/components/HomeScreen.vue'
 import LevelScreen from '@/components/LevelScreen.vue'
 import GameScreen from '@/components/GameScreen.vue'
+import SettingsScreen from './components/SettingsScreen.vue'
 
 const screenStack = ref(['home'])
 const selectedLevel = ref(0)
@@ -45,12 +46,13 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <HomeScreen v-if="currentScreen === 'home'" @start="goTo('levelSelect')" />
+  <HomeScreen v-if="currentScreen === 'home'" @start="goTo('levelSelect')" @settings="goTo('settings')"/>
   <LevelScreen
     v-else-if="currentScreen === 'levelSelect'"
     @selectLevel="startLevel"
     @back="goBack"
   />
+  <SettingsScreen v-else-if ="currentScreen === 'settings' " @back="goBack" />
   <GameScreen
     v-else
     :startLevel="selectedLevel"
