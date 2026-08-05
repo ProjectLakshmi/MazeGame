@@ -103,6 +103,7 @@ onUnmounted(stopGame)
 </template>
 
 <style scoped>
+@import url('https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;700&family=JetBrains+Mono:wght@400&display=swap');
 .header-row {
   display: flex;
   justify-content: space-between;

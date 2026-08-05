@@ -1,28 +1,43 @@
 import { ref, computed } from 'vue'
 import playerSprite from '@/asset/player.png'
 import enemySprite from '@/asset/enemy.png'
-import {useSaveData} from '@/composables/useSaveData.js'
+import { useSaveData } from '@/composables/useSaveData.js'
+import { useSound } from '@/composables/useSound.js'
+import { useJoystick } from '@/composables/useJoystick.js'
+import { mulberry32, generateMaze, findPath, pickEnemyPatrol } from '@/utils/mazeGenerator.js'
+import { getThemeForLevel } from '@/utils/worldThemes.js'
+import { drawTiles, drawWallEdges, drawExit, drawFlood, drawSprite, getSquashStretch } from '@/utils/mazeRenderer.js'
 
 export function useMazeGame() {
   let ctx = null
-  const canvasEl = ref(null)
+const canvasEl = ref(null)
+const TOTAL_LEVELS = 12
+const currentTheme = ref(getThemeForLevel(0, TOTAL_LEVELS))
+let moveAnimStartTime = 0
 
-  const {getSettings, saveSettings, getProgress, saveLevelProgress} = useSaveData()
+  const { getSettings, getProgress, saveLevelProgress } = useSaveData()
+  const {
+    soundEnabled,
+    toggleSound,
+    playMoveSound,
+    playCaughtSound,
+    playLevelCompleteSound,
+    playFloodWarningSound,
+  } = useSound()
 
   const moveCount = ref(0)
   const levelstartTime = ref(0)
-  const elapsedTime = ref(0)
 
   const CELL = 40
   const SPRITE_SIZE = 32
-  const TOTAL_LEVELS = 12
+  
   const currentLevelIndex = ref(0)
   const currentLevel = ref(null)
   const player = ref({ row: 0, col: 0, facingLeft: false })
   const enemy = ref(null)
   const floodPercent = ref(0)
   const caughtMessage = ref('')
-  const levelCompleteInfo = ref(null) // null, or { levelIndex, stars, moves, seconds }
+  const levelCompleteInfo = ref(null)
   let enemyIntervalId = null
 
   const playerImg = new Image()
@@ -47,148 +62,20 @@ export function useMazeGame() {
     currentLevel.value ? currentLevel.value.maze.length * CELL : 320
   )
 
-  // A small seeded RNG (mulberry32) — the same seed always produces the same
-  // sequence of "random" numbers, unlike Math.random(). This is what lets a
-  // level regenerate the identical maze every time it's replayed, so star
-  // ratings are actually comparing the same challenge, not a new one.
-  function mulberry32(seed) {
-    return function () {
-      seed |= 0
-      seed = (seed + 0x6D2B79F5) | 0
-      let t = Math.imul(seed ^ (seed >>> 15), 1 | seed)
-      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t
-      return ((t ^ (t >>> 14)) >>> 0) / 4294967296
-    }
-  }
-
-  // ---------- Maze generation ----------
-  function generateMaze(roomsWide, roomsHigh, rng = Math.random) {
-    const width = roomsWide * 2 + 1
-    const height = roomsHigh * 2 + 1
-
-    const maze = []
-    for (let r = 0; r < height; r++) {
-      maze.push(new Array(width).fill(1))
-    }
-
-    const visited = []
-    for (let r = 0; r < roomsHigh; r++) {
-      visited.push(new Array(roomsWide).fill(false))
-    }
-
-    function carve(roomRow, roomCol) {
-      visited[roomRow][roomCol] = true
-      maze[roomRow * 2 + 1][roomCol * 2 + 1] = 0
-
-      const directions = [[-1, 0], [1, 0], [0, -1], [0, 1]]
-      directions.sort(() => rng() - 0.5)
-
-      for (const [dRow, dCol] of directions) {
-        const nextRow = roomRow + dRow
-        const nextCol = roomCol + dCol
-        const inBounds = nextRow >= 0 && nextRow < roomsHigh && nextCol >= 0 && nextCol < roomsWide
-        if (inBounds && !visited[nextRow][nextCol]) {
-          const wallRow = roomRow * 2 + 1 + dRow
-          const wallCol = roomCol * 2 + 1 + dCol
-          maze[wallRow][wallCol] = 0
-          carve(nextRow, nextCol)
-        }
-      }
-    }
-
-    carve(0, 0)
-
-    return {
-      maze,
-      start: { row: 1, col: 1 },
-      exit: { row: height - 2, col: width - 2 },
-    }
-  }
-
-  function findPath(maze, from, to) {
-    const rows = maze.length
-    const cols = maze[0].length
-    const visited = Array.from({ length: rows }, () => new Array(cols).fill(false))
-    const cameFrom = {}
-    const queue = [from]
-    visited[from.row][from.col] = true
-
-    const key = (r, c) => r + ',' + c
-
-    while (queue.length > 0) {
-      const current = queue.shift()
-      if (current.row === to.row && current.col === to.col) break
-
-      const neighbors = [
-        { row: current.row - 1, col: current.col },
-        { row: current.row + 1, col: current.col },
-        { row: current.row, col: current.col - 1 },
-        { row: current.row, col: current.col + 1 },
-      ]
-
-      for (const n of neighbors) {
-        const inBounds = n.row >= 0 && n.row < rows && n.col >= 0 && n.col < cols
-        if (inBounds && maze[n.row][n.col] === 0 && !visited[n.row][n.col]) {
-          visited[n.row][n.col] = true
-          cameFrom[key(n.row, n.col)] = current
-          queue.push(n)
-        }
-      }
-    }
-
-    const path = []
-    let step = to
-    while (step) {
-      path.unshift(step)
-      step = cameFrom[key(step.row, step.col)]
-    }
-    return path
-  }
-
-  function collectFloorCells(maze) {
-    const cells = []
-    for (let r = 0; r < maze.length; r++) {
-      for (let c = 0; c < maze[r].length; c++) {
-        if (maze[r][c] === 0) cells.push({ row: r, col: c })
-      }
-    }
-    return cells
-  }
-
-
-  function pickEnemyPatrol(level) {
-    const floorCells = collectFloorCells(level.maze)
-    let path = []
-    let attempts = 0
-    while (path.length < 4 && attempts < 20) {
-      const a = floorCells[Math.floor(Math.random() * floorCells.length)]
-      const b = floorCells[Math.floor(Math.random() * floorCells.length)]
-    const distFromStart = Math.abs(a.row - level.start.row) + Math.abs(a.col - level.start.col)
-    if (distFromStart < 3) { attempts++; continue }
-      path = findPath(level.maze, a, b)
-      attempts++
-    }
-    if (path.length < 2) path = findPath(level.maze, level.start, level.exit)
-    return { path, pathIndex: 0, direction: 1 }
-  }
-
   // ---------- Flood mechanic ----------
   const FLOOD_START_DELAY_MS = 2500
   const BASE_RISE_MS_PER_ROW = 2600
   const MIN_RISE_MS_PER_ROW = 1000
-  const MOVE_TIME_BUDGET_MS =260
+  const MOVE_TIME_BUDGET_MS = 260
   const ENEMY_DODGE_BUFFER_MS = 4000
   let currentRiseMsPerRow = BASE_RISE_MS_PER_ROW
   let levelStartTime = 0
   let invulnerableUntil = 0
-
-  function riseMsPerRow() {
-    return currentRiseMsPerRow
-  }
+  let floodWarningPlayed = false // BUG FIX: moved out of drawMaze — see note below
 
   function floodFrontRow(level, timestamp) {
     const elapsed = Math.max(0, timestamp - levelStartTime - FLOOD_START_DELAY_MS)
-    return -1 + elapsed / riseMsPerRow()
+    return -1 + elapsed / currentRiseMsPerRow
   }
 
   function triggerCaught(reason, timestamp) {
@@ -209,23 +96,25 @@ export function useMazeGame() {
     levelstartTime.value = Date.now()
     const roomsWide = 4 + index
     const roomsHigh = 4 + index
-    const rng = mulberry32(index + 1) // seed tied to level number = same maze every replay
+    const rng = mulberry32(index + 1)
     const level = generateMaze(roomsWide, roomsHigh, rng)
 
     currentLevel.value = level
+    currentTheme.value = getThemeForLevel(index, TOTAL_LEVELS)
     resetPositions(level)
     levelStartTime = performance.now()
     invulnerableUntil = 0
     floodPercent.value = 0
+    floodWarningPlayed = false // reset once per level attempt, not once per frame
 
-  const shortestPath = findPath(level.maze, level.start, level.exit)
-  const pathMoves = Math.max(1, shortestPath.length - 1)
-  const dodgeBuffer = ENEMY_DODGE_BUFFER_MS * (1 + index * 0.1)
-  const requiredSafeMs = pathMoves * MOVE_TIME_BUDGET_MS + dodgeBuffer
-  const minSafeRiseMsPerRow = (requiredSafeMs - FLOOD_START_DELAY_MS) / level.exit.row
+    const shortestPath = findPath(level.maze, level.start, level.exit)
+    const pathMoves = Math.max(1, shortestPath.length - 1)
+    const dodgeBuffer = ENEMY_DODGE_BUFFER_MS * (1 + index * 0.1)
+    const requiredSafeMs = pathMoves * MOVE_TIME_BUDGET_MS + dodgeBuffer
+    const minSafeRiseMsPerRow = (requiredSafeMs - FLOOD_START_DELAY_MS) / level.exit.row
 
-  const difficultyRiseMsPerRow = Math.max(MIN_RISE_MS_PER_ROW, BASE_RISE_MS_PER_ROW - index * 70)
-  currentRiseMsPerRow = Math.max(difficultyRiseMsPerRow, minSafeRiseMsPerRow)
+    const difficultyRiseMsPerRow = Math.max(MIN_RISE_MS_PER_ROW, BASE_RISE_MS_PER_ROW - index * 70)
+    currentRiseMsPerRow = Math.max(difficultyRiseMsPerRow, minSafeRiseMsPerRow)
 
     requestAnimationFrame(() => {
       canvasEl.value.width = canvasWidth.value
@@ -278,142 +167,44 @@ export function useMazeGame() {
     }
   }
 
-  // ---------- Rendering ----------
-  function drawSprite(img, row, col, facingLeft, glowColor, timestamp) {
-    const centerX = col * CELL + CELL / 2
-    const centerY = row * CELL + CELL / 2
-    const x = centerX - SPRITE_SIZE / 2
-    const y = centerY - SPRITE_SIZE / 2
-    const pulse = 8 + Math.sin(timestamp / 220) * 4
 
-    ctx.save()
-    ctx.globalAlpha = 0.28
-    ctx.shadowColor = glowColor
-    ctx.shadowBlur = pulse + 6
-    ctx.fillStyle = glowColor
-    ctx.beginPath()
-    ctx.arc(centerX, centerY, SPRITE_SIZE / 2 + pulse / 2, 0, Math.PI * 2)
-    ctx.fill()
-    ctx.restore()
+ function drawMaze(timestamp) {
+  const level = currentLevel.value
+  if (!level || !ctx) return
+  const theme = currentTheme.value
 
-    ctx.save()
-    if (facingLeft) {
-      ctx.translate(centerX, 0)
-      ctx.scale(-1, 1)
-      ctx.drawImage(img, -SPRITE_SIZE / 2, y, SPRITE_SIZE, SPRITE_SIZE)
-    } else {
-      ctx.drawImage(img, x, y, SPRITE_SIZE, SPRITE_SIZE)
-    }
-    ctx.restore()
+  ctx.fillStyle = theme.wallBottom
+  ctx.fillRect(0, 0, canvasWidth.value, canvasHeight.value)
+
+  drawTiles(ctx, level, CELL, theme)
+  drawWallEdges(ctx, level, CELL, timestamp, 1, theme)
+  drawExit(ctx, level, CELL, timestamp, theme)
+
+  const front = floodFrontRow(level, timestamp)
+  floodPercent.value = Math.max(0, Math.min(100, Math.round(((front + 1) / level.maze.length) * 100)))
+  drawFlood(ctx, level, CELL, canvasWidth.value, timestamp, front, theme,
+    (brightness) => drawWallEdges(ctx, level, CELL, timestamp, brightness, theme))
+
+  if (floodPercent.value >= 70 && !floodWarningPlayed) {
+    playFloodWarningSound()
+    floodWarningPlayed = true
   }
 
-  function drawWallEdges(timestamp, brightness) {
-    const level = currentLevel.value
-    for (let row = 0; row < level.maze.length; row++) {
-      for (let col = 0; col < level.maze[row].length; col++) {
-        if (level.maze[row][col] !== 1) continue
-        const x = col * CELL
-        const y = row * CELL
-        const flicker = 0.35 + Math.abs(Math.sin(timestamp / 900 + row * 3 + col * 7)) * 0.2
-        ctx.strokeStyle = `rgba(45, 245, 201, ${Math.min(1, flicker * brightness)})`
-        ctx.lineWidth = 2
-        ctx.strokeRect(x + 2, y + 2, CELL - 4, CELL - 4)
-      }
-    }
+  const squash = getSquashStretch(moveAnimStartTime, timestamp)
+
+  if (enemy.value) {
+    drawSprite(ctx, enemyImg, enemy.value.row, enemy.value.col, enemy.value.facingLeft, '#ff5f3a', timestamp, CELL, SPRITE_SIZE)
   }
+  drawSprite(ctx, playerImg, player.value.row, player.value.col, player.value.facingLeft, theme.accent, timestamp, CELL, SPRITE_SIZE, squash)
 
-  function drawMaze(timestamp) {
-    const level = currentLevel.value
-    if (!level || !ctx) return
-
-    ctx.fillStyle = '#0a0e14'
-    ctx.fillRect(0, 0, canvasWidth.value, canvasHeight.value)
-
-    for (let row = 0; row < level.maze.length; row++) {
-      for (let col = 0; col < level.maze[row].length; col++) {
-        const x = col * CELL
-        const y = row * CELL
-        if (level.maze[row][col] === 1) {
-          ctx.fillStyle = '#04070a'
-          ctx.fillRect(x, y, CELL, CELL)
-        } else {
-          ctx.fillStyle = '#232f42'
-          ctx.fillRect(x, y, CELL, CELL)
-          ctx.fillStyle = 'rgba(216, 228, 232, 0.08)'
-          ctx.beginPath()
-          ctx.arc(x + CELL / 2, y + CELL / 2, 2, 0, Math.PI * 2)
-          ctx.fill()
-        }
-      }
-    }
-
-    drawWallEdges(timestamp, 1)
-
-    const exitX = level.exit.col * CELL + CELL / 2
-    const exitY = level.exit.row * CELL + CELL / 2
-    const exitPulse = 10 + Math.sin(timestamp / 260) * 4
-    ctx.save()
-    ctx.shadowColor = '#2df5c9'
-    ctx.shadowBlur = exitPulse
-    ctx.fillStyle = '#2df5c9'
-    ctx.beginPath()
-    ctx.arc(exitX, exitY, CELL / 2 - 8, 0, Math.PI * 2)
-    ctx.fill()
-    ctx.restore()
-
-    const front = floodFrontRow(level, timestamp)
-    floodPercent.value = Math.max(0, Math.min(100, Math.round(((front + 1) / level.maze.length) * 100)))
-    let floodWarningPlayed = false
-    const floodBoundaryY = (front + 1) * CELL
-    if (floodBoundaryY > 0) {
-      ctx.save()
-      ctx.globalAlpha = 0.4
-      const gradient = ctx.createLinearGradient(0, 0, 0, floodBoundaryY)
-      gradient.addColorStop(0, '#7b2ff7')
-      gradient.addColorStop(1, '#0dd3c4')
-      ctx.fillStyle = gradient
-      ctx.fillRect(0, 0, canvasWidth.value, floodBoundaryY)
-      ctx.restore()
-
-      ctx.save()
-      ctx.strokeStyle = '#7ffcec'
-      ctx.lineWidth = 2
-      ctx.shadowColor = '#2df5c9'
-      ctx.shadowBlur = 10
-      ctx.beginPath()
-      for (let x = 0; x <= canvasWidth.value; x += 6) {
-        const wave = Math.sin(x / 22 + timestamp / 260) * 3
-        const yy = floodBoundaryY + wave
-        if (x === 0) ctx.moveTo(x, yy)
-        else ctx.lineTo(x, yy)
-      }
-      ctx.stroke()
-      ctx.restore()
-
-      ctx.save()
-      ctx.beginPath()
-      ctx.rect(0, 0, canvasWidth.value, floodBoundaryY)
-      ctx.clip()
-      drawWallEdges(timestamp, 1.8)
-      ctx.restore()
-    }
-if (floodPercent.value >= 70 && !floodWarningPlayed) {
-  playFloodWarningSound()
-  floodWarningPlayed = true
+  if (timestamp >= invulnerableUntil && player.value.row <= front) {
+    triggerCaught('flood', timestamp)
+  }
 }
-    if (enemy.value) {
-      drawSprite(enemyImg, enemy.value.row, enemy.value.col, enemy.value.facingLeft, '#ff5f3a', timestamp)
-    }
-    drawSprite(playerImg, player.value.row, player.value.col, player.value.facingLeft, '#2df5c9', timestamp)
-
-    if (timestamp >= invulnerableUntil && player.value.row <= front) {
-      triggerCaught('flood', timestamp)
-    }
-  }
 
   function tryMove(deltaRow, deltaCol) {
     const level = currentLevel.value
-    if (!level || levelCompleteInfo.value) return // freeze input while the complete modal is up
+    if (!level || levelCompleteInfo.value) return
     const newRow = player.value.row + deltaRow
     const newCol = player.value.col + deltaCol
 
@@ -423,6 +214,8 @@ if (floodPercent.value >= 70 && !floodWarningPlayed) {
       player.value.col = newCol
       moveCount.value++
       playMoveSound()
+      moveAnimStartTime = performance.now()
+
       if (enemy.value && enemy.value.row === newRow && enemy.value.col === newCol) {
         triggerCaught('guardian', performance.now())
         return
@@ -434,7 +227,6 @@ if (floodPercent.value >= 70 && !floodWarningPlayed) {
         saveLevelProgress(currentLevelIndex.value, stars, moveCount.value, seconds)
         playLevelCompleteSound()
 
-        
         if (enemyIntervalId) clearInterval(enemyIntervalId)
         running = false
         if (animFrameId) cancelAnimationFrame(animFrameId)
@@ -448,14 +240,6 @@ if (floodPercent.value >= 70 && !floodWarningPlayed) {
       }
     }
   }
-  function isLevelUnlocked(index) {
-    if (index === 0) return true
-    const progress = getProgress()
-    return !!progress[index - 1]
-  }
-  function getLevelResultsCompat() {
-  return getProgress()
-}
 
   function calculateStars(moves, seconds, mazeSize) {
     const perMoves = mazeSize * 2
@@ -464,23 +248,10 @@ if (floodPercent.value >= 70 && !floodWarningPlayed) {
     return 1
   }
 
-  function saveLevelResult(levelIndex, stars, moves, seconds) {
-    const results = JSON.parse(localStorage.getItem('mazeResults') || '{}')
-    const existing = results[levelIndex]
-    if (!existing || stars > existing.stars) {
-      results[levelIndex] = { stars, moves, seconds }
-      localStorage.setItem('mazeResults', JSON.stringify(results))
-    }
-  }
-
-  function getLevelResults() {
-    return JSON.parse(localStorage.getItem('mazeResults') || '{}')
-  }
-
   function isLevelUnlocked(index) {
     if (index === 0) return true
-    const results = getLevelResults()
-    return !!results[index - 1]
+    const progress = getProgress()
+    return !!progress[index - 1]
   }
 
   function continueToNextLevel() {
@@ -493,11 +264,6 @@ if (floodPercent.value >= 70 && !floodWarningPlayed) {
     }
   }
 
-  function goToNextLevel() {
-    currentLevelIndex.value++
-    loadLevel(currentLevelIndex.value)
-  }
-
   function handleKeydown(event) {
     if (event.key === 'ArrowUp') tryMove(-1, 0)
     else if (event.key === 'ArrowDown') tryMove(1, 0)
@@ -505,72 +271,15 @@ if (floodPercent.value >= 70 && !floodWarningPlayed) {
     else if (event.key === 'ArrowRight') tryMove(0, 1)
   }
 
-  // ---------- Joystick ----------
-  const joystickBase = ref(null)
-  const knobPosition = ref({ x: 0, y: 0 })
-  let joystickCenter = { x: 0, y: 0 }
-  let currentDirection = { row: 0, col: 0 }
-  let lastMovedDirection = { row: 0, col: 0 }
-  let joystickMoveIntervalId = null
-  const JOYSTICK_RADIUS = 50
-  const DEAD_ZONE = 6
-
-  function handleJoystickStart(event) {
-    const rect = joystickBase.value.getBoundingClientRect()
-    joystickCenter = { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }
-    updateJoystick(event)
-
-    if (joystickMoveIntervalId) clearInterval(joystickMoveIntervalId)
-    joystickMoveIntervalId = setInterval(() => {
-      if (currentDirection.row !== 0 || currentDirection.col !== 0) {
-        tryMove(currentDirection.row, currentDirection.col)
-      }
-    }, 130)
-  }
-
-  function handleJoystickMove(event) {
-    updateJoystick(event)
-  }
-
-  function updateJoystick(event) {
-    const touch = event.touches ? event.touches[0] : event
-    const deltaX = touch.clientX - joystickCenter.x
-    const deltaY = touch.clientY - joystickCenter.y
-
-    const distance = Math.min(Math.hypot(deltaX, deltaY), JOYSTICK_RADIUS)
-    const angle = Math.atan2(deltaY, deltaX)
-
-    knobPosition.value = { x: Math.cos(angle) * distance, y: Math.sin(angle) * distance }
-
-    if (distance < DEAD_ZONE) {
-      currentDirection = { row: 0, col: 0 }
-      return
-    }
-
-   const newDirection =
-    Math.abs(deltaX) > Math.abs(deltaY)
-      ? (deltaX > 0 ? { row: 0, col: 1 } : { row: 0, col: -1 })
-      : (deltaY > 0 ? { row: 1, col: 0 } : { row: -1, col: 0 })
-
-  currentDirection = newDirection
-
-  const directionChanged =
-    newDirection.row !== lastMovedDirection.row || newDirection.col !== lastMovedDirection.col
-  if (directionChanged) {
-    tryMove(newDirection.row, newDirection.col)
-    lastMovedDirection = { ...newDirection }
-  }
-  }
-
-  function handleJoystickEnd() {
-    if (joystickMoveIntervalId) {
-      clearInterval(joystickMoveIntervalId)
-      joystickMoveIntervalId = null
-    }
-    currentDirection = { row: 0, col: 0 }
-     lastMovedDirection = { row: 0, col: 0 }
-    knobPosition.value = { x: 0, y: 0 }
-  }
+  // ---------- Joystick — delegated entirely to useJoystick ----------
+  const {
+    joystickBase,
+    knobPosition,
+    handleJoystickStart,
+    handleJoystickMove,
+    handleJoystickEnd,
+    stopJoystick,
+  } = useJoystick(tryMove, { radius: 50, deadZone: 6, repeatMs: 130 })
 
   // ---------- Game loop ----------
   let running = false
@@ -597,70 +306,9 @@ if (floodPercent.value >= 70 && !floodWarningPlayed) {
     running = false
     if (animFrameId) cancelAnimationFrame(animFrameId)
     if (enemyIntervalId) clearInterval(enemyIntervalId)
-    if (joystickMoveIntervalId) clearInterval(joystickMoveIntervalId)
+    stopJoystick()
     window.removeEventListener('keydown', handleKeydown)
   }
-  // ---------- Sound ----------
-
-const soundEnabled = ref(getSettings().soundEnabled)
-let audioCtx = null
-
-function getAudioCtx() {
-  if (!audioCtx) {
-    audioCtx = new (window.AudioContext || window.webkitAudioContext)()
-  }
-  if (audioCtx.state === 'suspended') {
-    audioCtx.resume()
-  }
-  return audioCtx
-}
-
-function toggleSound() {
-  soundEnabled.value = !soundEnabled.value
-  saveSettings({...getSettings(), soundEnabled: soundEnabled.value })
-}
-
-// Plays a single tone. type = 'sine' (soft), 'square' (harsh), 'triangle' (mellow)
-function playTone(frequency, durationMs, type = 'sine', volume = 0.15) {
- 
-  if (!soundEnabled.value) return
-  const ctx = getAudioCtx()
-  
-  const oscillator = ctx.createOscillator()
-  const gain = ctx.createGain()
-
-  oscillator.type = type
-  oscillator.frequency.value = frequency
-  gain.gain.value = volume
-  // fade out instead of a hard stop, to avoid an audible click at the end
-  gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + durationMs / 1000)
-
-  oscillator.connect(gain)
-  gain.connect(ctx.destination)
-  oscillator.start()
-  oscillator.stop(ctx.currentTime + durationMs / 1000)
-}
-
-function playMoveSound() {
-  playTone(320, 60, 'sine', 0.08)
-}
-
-function playCaughtSound() {
-  playTone(180, 90, 'square', 0.18)
-  setTimeout(() => playTone(110, 160, 'square', 0.16), 90)
-}
-
-function playLevelCompleteSound() {
-  // a quick ascending arpeggio
-  const notes = [523, 659, 784, 1047] // C5, E5, G5, C6
-  notes.forEach((freq, i) => {
-    setTimeout(() => playTone(freq, 180, 'triangle', 0.14), i * 90)
-  })
-}
-
-function playFloodWarningSound() {
-  playTone(220, 300, 'sine', 0.1)
-}
 
   return {
     canvasEl,
@@ -677,10 +325,10 @@ function playFloodWarningSound() {
     handleJoystickStart,
     handleJoystickMove,
     handleJoystickEnd,
-    getLevelResults,
+    getLevelResults: getProgress,
     isLevelUnlocked,
     TOTAL_LEVELS,
-    soundEnabled,     
-  toggleSound
+    soundEnabled,
+    toggleSound,
   }
 }
