@@ -191,6 +191,7 @@ export function useMazeGame() {
   function triggerCaught(reason, timestamp) {
     if (timestamp < invulnerableUntil) return
     invulnerableUntil = timestamp + 900
+    playCaughtSound()
     caughtMessage.value = reason === 'flood' ? 'Swallowed by the flood' : 'Spotted by the guardian'
     resetPositions(currentLevel.value)
     levelStartTime = timestamp
@@ -359,7 +360,7 @@ export function useMazeGame() {
 
     const front = floodFrontRow(level, timestamp)
     floodPercent.value = Math.max(0, Math.min(100, Math.round(((front + 1) / level.maze.length) * 100)))
-
+    let floodWarningPlayed = false
     const floodBoundaryY = (front + 1) * CELL
     if (floodBoundaryY > 0) {
       ctx.save()
@@ -393,7 +394,10 @@ export function useMazeGame() {
       drawWallEdges(timestamp, 1.8)
       ctx.restore()
     }
-
+if (floodPercent.value >= 70 && !floodWarningPlayed) {
+  playFloodWarningSound()
+  floodWarningPlayed = true
+}
     if (enemy.value) {
       drawSprite(enemyImg, enemy.value.row, enemy.value.col, enemy.value.facingLeft, '#ff5f3a', timestamp)
     }
@@ -415,6 +419,7 @@ export function useMazeGame() {
       player.value.row = newRow
       player.value.col = newCol
       moveCount.value++
+      playMoveSound()
       if (enemy.value && enemy.value.row === newRow && enemy.value.col === newCol) {
         triggerCaught('guardian', performance.now())
         return
@@ -424,6 +429,7 @@ export function useMazeGame() {
         const seconds = (Date.now() - levelstartTime.value) / 1000
         const stars = calculateStars(moveCount.value, seconds, level.maze.length)
         saveLevelResult(currentLevelIndex.value, stars, moveCount.value, seconds)
+        playLevelCompleteSound()
 
         
         if (enemyIntervalId) clearInterval(enemyIntervalId)
@@ -583,6 +589,62 @@ export function useMazeGame() {
     if (joystickMoveIntervalId) clearInterval(joystickMoveIntervalId)
     window.removeEventListener('keydown', handleKeydown)
   }
+  // ---------- Sound ----------
+
+const soundEnabled = ref(localStorage.getItem('mazeSoundEnabled') !== 'false')
+let audioCtx = null
+
+function getAudioCtx() {
+  if (!audioCtx) {
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)()
+  }
+  return audioCtx
+}
+
+function toggleSound() {
+  soundEnabled.value = !soundEnabled.value
+  localStorage.setItem('mazeSoundEnabled', soundEnabled.value)
+}
+
+// Plays a single tone. type = 'sine' (soft), 'square' (harsh), 'triangle' (mellow)
+function playTone(frequency, durationMs, type = 'sine', volume = 0.15) {
+  if (!soundEnabled.value) return
+  const ctx = getAudioCtx()
+  const oscillator = ctx.createOscillator()
+  const gain = ctx.createGain()
+
+  oscillator.type = type
+  oscillator.frequency.value = frequency
+  gain.gain.value = volume
+  // fade out instead of a hard stop, to avoid an audible click at the end
+  gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + durationMs / 1000)
+
+  oscillator.connect(gain)
+  gain.connect(ctx.destination)
+  oscillator.start()
+  oscillator.stop(ctx.currentTime + durationMs / 1000)
+}
+
+function playMoveSound() {
+  playTone(320, 60, 'sine', 0.08)
+}
+
+function playCaughtSound() {
+  playTone(180, 90, 'square', 0.18)
+  setTimeout(() => playTone(110, 160, 'square', 0.16), 90)
+}
+
+function playLevelCompleteSound() {
+  // a quick ascending arpeggio
+  const notes = [523, 659, 784, 1047] // C5, E5, G5, C6
+  notes.forEach((freq, i) => {
+    setTimeout(() => playTone(freq, 180, 'triangle', 0.14), i * 90)
+  })
+}
+
+function playFloodWarningSound() {
+  playTone(220, 300, 'sine', 0.1)
+}
 
   return {
     canvasEl,
