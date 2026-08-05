@@ -667,5 +667,7 @@ function playFloodWarningSound() {
     getLevelResults,
     isLevelUnlocked,
     TOTAL_LEVELS,
+    soundEnabled,     
+  toggleSound
   }
 }
