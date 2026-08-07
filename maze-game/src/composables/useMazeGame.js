@@ -198,7 +198,7 @@ const MOVE_ANIM_DURATION = 150
   if (enemy.value) {
     drawSprite(ctx, enemyImg, enemy.value.row, enemy.value.col, enemy.value.facingLeft, '#ff5f3a', timestamp, CELL, SPRITE_SIZE)
   }
-  drawSprite(ctx, playerImg, interpPos.row, interpPos.col, player.value.facingLeft, theme.accent, timestamp, CELL, SPRITE_SIZE, squash)
+  drawSprite(ctx, playerImg, interpolatedPos.row, interpolatedPos.col, player.value.facingLeft, theme.accent, timestamp, CELL, SPRITE_SIZE, squash)
 
   if (timestamp >= invulnerableUntil && player.value.row <= front) {
     triggerCaught('flood', timestamp)
