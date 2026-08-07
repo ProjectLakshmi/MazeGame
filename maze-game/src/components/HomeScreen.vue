@@ -110,7 +110,7 @@ onUnmounted(() => {
     </div>
 
     <button class="start-btn" @click="handleStart">Start Game</button>
-    <button class="settings-btn" @click="console.log('button clicked') ; $emit('settings')">⚙ Settings</button>
+    <button class="settings-btn" @click="console.log('button clicked') ;$emit('settings')">⚙ Settings</button>
     <button class="howto-toggle" @click="showHowToPlay = !showHowToPlay">
       {{ showHowToPlay ? 'Hide instructions' : 'How to play' }}
     </button>

@@ -14,6 +14,8 @@ const canvasEl = ref(null)
 const TOTAL_LEVELS = 12
 const currentTheme = ref(getThemeForLevel(0, TOTAL_LEVELS))
 let moveAnimStartTime = 0
+const prevPlayerPos = ref({ row: 0, col: 0 })
+const MOVE_ANIM_DURATION = 150
 
   const { getSettings, getProgress, saveLevelProgress } = useSaveData()
   const {
@@ -126,6 +128,7 @@ let moveAnimStartTime = 0
 
   function resetPositions(level) {
     player.value = { row: level.start.row, col: level.start.col, facingLeft: false }
+    prevPlayerPos.value = { row: level.start.row, col: level.start.col }
     const patrol = pickEnemyPatrol(level)
     enemy.value = {
       row: patrol.path[0].row,
@@ -191,14 +194,27 @@ let moveAnimStartTime = 0
   }
 
   const squash = getSquashStretch(moveAnimStartTime, timestamp)
-
+  const interpolatedPos = getInterpolatedPlayerPos(timestamp)
   if (enemy.value) {
     drawSprite(ctx, enemyImg, enemy.value.row, enemy.value.col, enemy.value.facingLeft, '#ff5f3a', timestamp, CELL, SPRITE_SIZE)
   }
-  drawSprite(ctx, playerImg, player.value.row, player.value.col, player.value.facingLeft, theme.accent, timestamp, CELL, SPRITE_SIZE, squash)
+  drawSprite(ctx, playerImg, interpPos.row, interpPos.col, player.value.facingLeft, theme.accent, timestamp, CELL, SPRITE_SIZE, squash)
 
   if (timestamp >= invulnerableUntil && player.value.row <= front) {
     triggerCaught('flood', timestamp)
+  }
+}
+function easeOutQuad(t) {
+  return t * (2 - t)
+}
+
+function getInterpolatedPlayerPos(timestamp) {
+  const elapsed = timestamp - moveAnimStartTime
+  const t = Math.min(1, Math.max(0, elapsed / MOVE_ANIM_DURATION))
+  const eased = easeOutQuad(t)
+  return {
+    row: prevPlayerPos.value.row + (player.value.row - prevPlayerPos.value.row) * eased,
+    col: prevPlayerPos.value.col + (player.value.col - prevPlayerPos.value.col) * eased,
   }
 }
 
@@ -210,6 +226,7 @@ let moveAnimStartTime = 0
 
     if (level.maze[newRow] && level.maze[newRow][newCol] === 0) {
       if (deltaCol !== 0) player.value.facingLeft = deltaCol < 0
+      prevPlayerPos.value = { row: player.value.row, col: player.value.col }
       player.value.row = newRow
       player.value.col = newCol
       moveCount.value++
