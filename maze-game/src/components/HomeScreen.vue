@@ -38,9 +38,7 @@ const previewPath = [
   {r:1,c:1},{r:1,c:2},{r:1,c:3},{r:2,c:3},{r:3,c:3},{r:3,c:4},{r:3,c:5},
   {r:3,c:6},{r:2,c:6},{r:1,c:6},{r:1,c:7},{r:2,c:7},{r:3,c:7},{r:4,c:7},
   {r:5,c:7},{r:5,c:6},{r:5,c:5},{r:5,c:4},{r:5,c:3},{r:5,c:2},{r:5,c:1},
-  {r:6,c:1}, // dead-endish detour to feel organic before resuming
-  {r:5,c:1},{r:5,c:0}, // will clamp, harmless
-  {r:6,c:1},{r:7,c:1},{r:7,c:2},{r:7,c:3},{r:7,c:4},{r:7,c5:5},
+  {r:6,c:1},{r:7,c:1},{r:7,c:2},{r:7,c:3},{r:7,c:4},{r:7,c:5},
 ]
 
 function drawPreview(progress) {
@@ -110,7 +108,7 @@ onUnmounted(() => {
     </div>
 
     <button class="start-btn" @click="handleStart">Start Game</button>
-    <button class="settings-btn" @click="console.log('button clicked') ;$emit('settings')">⚙ Settings</button>
+    <button class="settings-btn" @click="$emit('settings')">⚙ Settings</button>
     <button class="howto-toggle" @click="showHowToPlay = !showHowToPlay">
       {{ showHowToPlay ? 'Hide instructions' : 'How to play' }}
     </button>
@@ -211,6 +209,23 @@ h1 {
 
 .start-btn:active {
   transform: scale(0.98);
+}
+
+.settings-btn {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  padding: 6px 16px;
+  border-radius: 6px;
+  border: 1px solid #2a3340;
+  background: transparent;
+  color: #8a97a8;
+  cursor: pointer;
+  margin-top: 6px;
+}
+
+.settings-btn:hover {
+  border-color: #52e3a4;
+  color: #52e3a4;
 }
 
 .howto-toggle {
