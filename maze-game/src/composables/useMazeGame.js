@@ -102,7 +102,8 @@ let enemyMoveAnimStartTime = 0
     const roomsWide = 4 + index
     const roomsHigh = 4 + index
     const rng = mulberry32(index + 1)
-    const level = generateMaze(roomsWide, roomsHigh, rng)
+    const braidChance = Math.min(0.3, 0.1 + index * 0.02)
+    const level = generateMaze(roomsWide, roomsHigh, rng, braidChance)
 
     currentLevel.value = level
     currentTheme.value = getThemeForLevel(index, TOTAL_LEVELS)
