@@ -20,6 +20,12 @@ export function useMazeGame() {
   const ENEMY_MOVE_ANIM_DURATION = 180
   let enemyMoveAnimStartTime = 0
   let shakeStartTime = -9999
+  //smart enemy chase//
+  const CHASE_TRIGGER_DISTANCE = 4
+  const CHASE_DURATION_MS = 3000
+  const CHASE_REPATH_INTERVAL_MS = 600
+  let chaseUntil = 0
+  let lastCahseRepathAt = 0
 
   // ---------- ADDED: pause/backgrounding time-freeze mechanism ----------
   const isPaused = ref(false)
@@ -185,8 +191,10 @@ export function useMazeGame() {
       pathIndex: 0,
       direction: 1,
       facingLeft: false,
+      chasePath: null,
     }
     prevEnemyPos.value = { row: enemy.value.row, col: enemy.value.col }
+    chaseUntil = 0
   }
 
   function startEnemyLoop() {
@@ -196,12 +204,36 @@ export function useMazeGame() {
   }
 
   function moveEnemy() {
-    const e = enemy.value
-    if (!e || e.path.length <= 1) return
+  const e = enemy.value
+  if (!e) return
 
-    prevEnemyPos.value = { row: e.row, col: e.col }
-    enemyMoveAnimStartTime = now() 
+  const timestamp = now()
+  const distToPlayer = Math.abs(e.row - player.value.row) + Math.abs(e.col - player.value.col) 
 
+  if (timestamp > chaseUntil && distToPlayer <= CHASE_TRIGGER_DISTANCE) {
+    chaseUntil = timestamp + CHASE_DURATION_MS
+  }
+  const isChasing = timestamp < chaseUntil 
+
+  prevEnemyPos.value = { row: e.row, col: e.col }
+  enemyMoveAnimStartTime = timestamp
+
+  if (isChasing) {
+
+    if (!e.chasePath || e.chasePath.length < 2 || timestamp - lastChaseRepathAt > CHASE_REPATH_INTERVAL_MS) {
+      e.chasePath = findPath(currentLevel.value.maze, { row: e.row, col: e.col }, { row: player.value.row, col: player.value.col })
+      lastChaseRepathAt = timestamp
+    }
+    if (e.chasePath && e.chasePath.length > 1) {
+      const next = e.chasePath[1]
+      if (next.col !== e.col) e.facingLeft = next.col < e.col
+      e.row = next.row
+      e.col = next.col
+      e.chasePath = e.chasePath.slice(1) 
+    }
+  } else {
+    
+    if (e.path.length <= 1) return
     const prevCol = e.col
     e.pathIndex += e.direction
     if (e.pathIndex >= e.path.length) {
@@ -211,16 +243,17 @@ export function useMazeGame() {
       e.pathIndex = 1
       e.direction = 1
     }
-
     const step = e.path[e.pathIndex]
     e.row = step.row
     e.col = step.col
     if (e.col !== prevCol) e.facingLeft = e.col < prevCol
-
-    if (e.row === player.value.row && e.col === player.value.col) {
-      triggerCaught('guardian', now())
-    }
+    e.chasePath = null 
   }
+
+  if (e.row === player.value.row && e.col === player.value.col) {
+    triggerCaught('guardian', timestamp) 
+  }
+}
 
   function easeOutQuad(t) {
     return t * (2 - t)
@@ -350,7 +383,7 @@ export function useMazeGame() {
 
   function isLevelUnlocked(index) {
     if (index === 0) return true
-    const progress = getProgress()
+    const progress = progress ?? getProgress()
     return !!progress[index - 1]
   }
 

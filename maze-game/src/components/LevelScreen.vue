@@ -12,18 +12,18 @@ const results = computed(() => getProgress())
 const levels = computed(() =>
   Array.from({ length: TOTAL_LEVELS }, (_, i) => ({
     index: i,
-    unlocked: isLevelUnlocked(i),
+    unlocked: isLevelUnlocked(i,results.value),
     stars: results.value[i]?.stars ?? 0,
   }))
 )
 
-// ADDED — total stars earned vs. possible, for a progress summary header
+
 const totalStars = computed(() =>
   levels.value.reduce((sum, l) => sum + l.stars, 0)
 )
 const maxStars = computed(() => TOTAL_LEVELS * 3)
 
-// ADDED — the first unlocked level with 0 stars is the natural "next to play" tile
+
 const nextLevelIndex = computed(() => {
   const found = levels.value.find((l) => l.unlocked && l.stars === 0)
   return found ? found.index : -1
