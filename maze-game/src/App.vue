@@ -33,7 +33,11 @@ function startLevel(index) {
   selectedLevel.value = index
   goTo('game')
 }
-
+function continueLevel(index){
+  selectedLevel.value = index
+  goTo('levelSelect')
+  goTo('game')
+}
 onMounted(() => {
  
   history.replaceState({ screenIndex: 0 }, '')
@@ -46,7 +50,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <HomeScreen v-if="currentScreen === 'home'" @start="goTo('levelSelect')" @settings="goTo('settings')"/>
+  <HomeScreen v-if="currentScreen === 'home'" @start="goTo('levelSelect')" @settings="goTo('settings')" @continue="continueLevel"/>
   <LevelScreen
     v-else-if="currentScreen === 'levelSelect'"
     @selectLevel="startLevel"

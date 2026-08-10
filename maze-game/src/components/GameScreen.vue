@@ -19,6 +19,8 @@ const {
   handleJoystickStart,
   handleJoystickMove,
   handleJoystickEnd,
+  isPaused,
+  togglePause,
 } = useMazeGame()
 
 const confettiPieces = ref([])
@@ -51,7 +53,10 @@ onUnmounted(stopGame)
 <template>
   <div class="header-row">
     <button class="back-btn" @click="emit('backToLevelSelect')">← Levels</button>
+    <div class="header-actions"> 
+    <button class="sound-btn" @click="togglePause">{{ isPaused ? '▶' : '⏸' }}</button> 
     <button class="sound-btn" @click="toggleSound">{{ soundEnabled ? '🔊' : '🔇' }}</button>
+  </div>
   </div>
   <h2>Level {{ currentLevelIndex + 1 }}</h2>
 
@@ -91,6 +96,16 @@ onUnmounted(stopGame)
     :class="{ active: isJoystickActive }"
     :style="{ transform: `translate(${knobPosition.x}px, ${knobPosition.y}px)` }"
   ></div>
+</div>
+
+<div v-if="isPaused && !levelCompleteInfo" class="modal-backdrop"> 
+  <div class="modal">
+    <h2>Paused</h2>
+    <div class="modal-actions">
+      <button class="secondary" @click="emit('backToLevelSelect')">Level Select</button>
+      <button class="primary" @click="togglePause">Resume</button>
+    </div>
+  </div>
 </div>
 
   <div v-if="levelCompleteInfo" class="modal-backdrop">

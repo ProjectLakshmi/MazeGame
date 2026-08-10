@@ -1,13 +1,14 @@
 <script setup>
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, computed,  onMounted, onUnmounted } from 'vue'
 import { useSaveData } from '@/composables/useSaveData'
 
-const emit = defineEmits(['start','settings'])
+const emit = defineEmits(['start','settings', 'continue'])
 
 const showHowToPlay = ref(false)
 const difficulty = ref('normal')
-const { getBestLevelReached } = useSaveData()
+const { getBestLevelReached, getLastLevel } = useSaveData()
 const bestLevel = ref(getBestLevelReached())
+const lastLevel = computed(()=> getLastLevel())
 
 const difficulties = [
   { id: 'easy', label: 'Easy', note: 'Smaller mazes, slower patrol' },
@@ -17,6 +18,9 @@ const difficulties = [
 
 function handleStart() {
   emit('start', difficulty.value)
+}
+function handleContinue(){
+  emit('continue', lastLevel.value)
 }
 
 // ---------- Signature element: a small maze that solves itself, on loop ----------
@@ -106,7 +110,9 @@ onUnmounted(() => {
         {{ d.label }}
       </button>
     </div>
-
+    <button v-if="lastLevel !== null" class="continue-btn" @click="handleContinue"> <!-- ADDED -->
+  Continue — Level {{ lastLevel + 1 }}
+</button>
     <button class="start-btn" @click="handleStart">Start Game</button>
     <button class="settings-btn" @click="$emit('settings')">⚙ Settings</button>
     <button class="howto-toggle" @click="showHowToPlay = !showHowToPlay">
@@ -285,5 +291,21 @@ h1 {
   font-size: 16px;
   color: #52e3a4;
   font-weight: 500;
+}
+.continue-btn {
+  padding: 12px 40px;
+  font-size: 15px;
+  font-weight: 600;
+  font-family: 'Space Grotesk', sans-serif;
+  border-radius: 8px;
+  border: 1px solid #52e3a4;
+  background: transparent;
+  color: #52e3a4;
+  cursor: pointer;
+  margin-top: 4px;
+}
+.continue-btn:active {
+  transform: scale(0.98);
+  background: rgba(82, 227, 164, 0.08);
 }
 </style>

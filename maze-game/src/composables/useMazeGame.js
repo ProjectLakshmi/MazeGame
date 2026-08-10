@@ -10,17 +10,58 @@ import { drawTiles, drawWallEdges, drawExit, drawFlood, drawSprite, getSquashStr
 
 export function useMazeGame() {
   let ctx = null
-const canvasEl = ref(null)
-const TOTAL_LEVELS = 12
-const currentTheme = ref(getThemeForLevel(0, TOTAL_LEVELS))
-let moveAnimStartTime = 0
-const prevPlayerPos = ref({ row: 0, col: 0 })
-const prevEnemyPos = ref({ row: 0, col: 0 })
-const MOVE_ANIM_DURATION = 150
-const ENEMY_MOVE_ANIM_DURATION = 180
-let enemyMoveAnimStartTime = 0
+  const canvasEl = ref(null)
+  const TOTAL_LEVELS = 12
+  const currentTheme = ref(getThemeForLevel(0, TOTAL_LEVELS))
+  let moveAnimStartTime = 0
+  const prevPlayerPos = ref({ row: 0, col: 0 })
+  const prevEnemyPos = ref({ row: 0, col: 0 })
+  const MOVE_ANIM_DURATION = 150
+  const ENEMY_MOVE_ANIM_DURATION = 180
+  let enemyMoveAnimStartTime = 0
+  let shakeStartTime = -9999
 
-  const { getSettings, getProgress, saveLevelProgress } = useSaveData()
+  // ---------- ADDED: pause/backgrounding time-freeze mechanism ----------
+  const isPaused = ref(false)
+  let totalPausedMs = 0
+  let pauseStartedAt = 0
+
+  function now() {
+    return performance.now() - totalPausedMs
+  }
+
+  function pauseGame() {
+    if (isPaused.value || !running) return
+    isPaused.value = true
+    pauseStartedAt = performance.now()
+    running = false
+    if (animFrameId) cancelAnimationFrame(animFrameId)
+    if (enemyIntervalId) clearInterval(enemyIntervalId)
+  }
+
+  function resumeGame() {
+    if (!isPaused.value) return
+    totalPausedMs += performance.now() - pauseStartedAt
+    isPaused.value = false
+    running = true
+    startEnemyLoop()
+    animFrameId = requestAnimationFrame(loop)
+  }
+
+  function togglePause() {
+    if (isPaused.value) resumeGame()
+    else pauseGame()
+  }
+
+  function handleVisibilityChange() {
+    if (document.hidden) {
+      pauseGame() 
+    }
+   
+  }
+  // ---------- end pause mechanism ----------
+
+  const { getSettings, getProgress, saveLevelProgress, saveLastLevel } = useSaveData()
   const {
     soundEnabled,
     toggleSound,
@@ -32,10 +73,11 @@ let enemyMoveAnimStartTime = 0
 
   const moveCount = ref(0)
   const levelstartTime = ref(0)
+  const elapsedSeconds = ref(0)
 
   const CELL = 40
   const SPRITE_SIZE = 32
-  
+
   const currentLevelIndex = ref(0)
   const currentLevel = ref(null)
   const player = ref({ row: 0, col: 0, facingLeft: false })
@@ -76,7 +118,7 @@ let enemyMoveAnimStartTime = 0
   let currentRiseMsPerRow = BASE_RISE_MS_PER_ROW
   let levelStartTime = 0
   let invulnerableUntil = 0
-  let floodWarningPlayed = false // BUG FIX: moved out of drawMaze — see note below
+  let floodWarningPlayed = false
 
   function floodFrontRow(level, timestamp) {
     const elapsed = Math.max(0, timestamp - levelStartTime - FLOOD_START_DELAY_MS)
@@ -88,6 +130,7 @@ let enemyMoveAnimStartTime = 0
     invulnerableUntil = timestamp + 900
     playCaughtSound()
     caughtMessage.value = reason === 'flood' ? 'Swallowed by the flood' : 'Spotted by the guardian'
+    shakeStartTime = timestamp
     resetPositions(currentLevel.value)
     levelStartTime = timestamp
     setTimeout(() => {
@@ -99,19 +142,19 @@ let enemyMoveAnimStartTime = 0
   function loadLevel(index) {
     moveCount.value = 0
     levelstartTime.value = Date.now()
+    saveLastLevel(index)
     const roomsWide = 4 + index
     const roomsHigh = 4 + index
     const rng = mulberry32(index + 1)
-    const braidChance = Math.min(0.3, 0.1 + index * 0.02)
-    const level = generateMaze(roomsWide, roomsHigh, rng, braidChance)
+    const level = generateMaze(roomsWide, roomsHigh, rng)
 
     currentLevel.value = level
     currentTheme.value = getThemeForLevel(index, TOTAL_LEVELS)
     resetPositions(level)
-    levelStartTime = performance.now()
+    levelStartTime = now() 
     invulnerableUntil = 0
     floodPercent.value = 0
-    floodWarningPlayed = false // reset once per level attempt, not once per frame
+    floodWarningPlayed = false
 
     const shortestPath = findPath(level.maze, level.start, level.exit)
     const pathMoves = Math.max(1, shortestPath.length - 1)
@@ -142,7 +185,7 @@ let enemyMoveAnimStartTime = 0
       direction: 1,
       facingLeft: false,
     }
-    prevEnemyPos.value = { row: enemy.value.row, col: enemy.value.col } 
+    prevEnemyPos.value = { row: enemy.value.row, col: enemy.value.col }
   }
 
   function startEnemyLoop() {
@@ -155,8 +198,8 @@ let enemyMoveAnimStartTime = 0
     const e = enemy.value
     if (!e || e.path.length <= 1) return
 
-    prevEnemyPos.value = { row: e.row, col: e.col } 
-  enemyMoveAnimStartTime = performance.now()
+    prevEnemyPos.value = { row: e.row, col: e.col }
+    enemyMoveAnimStartTime = now() 
 
     const prevCol = e.col
     e.pathIndex += e.direction
@@ -174,61 +217,90 @@ let enemyMoveAnimStartTime = 0
     if (e.col !== prevCol) e.facingLeft = e.col < prevCol
 
     if (e.row === player.value.row && e.col === player.value.col) {
-      triggerCaught('guardian', performance.now())
+      triggerCaught('guardian', now())
     }
   }
 
-
- function drawMaze(timestamp) {
-  const level = currentLevel.value
-  if (!level || !ctx) return
-  const theme = currentTheme.value
-
-  ctx.fillStyle = theme.wallBottom
-  ctx.fillRect(0, 0, canvasWidth.value, canvasHeight.value)
-
-  drawTiles(ctx, level, CELL, theme)
-  drawWallEdges(ctx, level, CELL, timestamp, 1, theme)
-  drawExit(ctx, level, CELL, timestamp, theme)
-
-  const front = floodFrontRow(level, timestamp)
-  floodPercent.value = Math.max(0, Math.min(100, Math.round(((front + 1) / level.maze.length) * 100)))
-  drawFlood(ctx, level, CELL, canvasWidth.value, timestamp, front, theme,
-    (brightness) => drawWallEdges(ctx, level, CELL, timestamp, brightness, theme))
-
-  if (floodPercent.value >= 70 && !floodWarningPlayed) {
-    playFloodWarningSound()
-    floodWarningPlayed = true
+  function easeOutQuad(t) {
+    return t * (2 - t)
   }
 
-  const squash = getSquashStretch(moveAnimStartTime, timestamp)
- const interpPlayerPos = getInterpolatedPos(prevPlayerPos.value, player.value, moveAnimStartTime, MOVE_ANIM_DURATION, timestamp)
-
-  if (enemy.value) {
-    drawSprite(ctx, enemyImg, enemy.value.row, enemy.value.col, enemy.value.facingLeft, '#ff5f3a', timestamp, CELL, SPRITE_SIZE)
+  function getInterpolatedPos(prevPos, currentPos, animStartTime, duration, timestamp) {
+    const elapsed = timestamp - animStartTime
+    const t = Math.min(1, Math.max(0, elapsed / duration))
+    const eased = easeOutQuad(t)
+    return {
+      row: prevPos.row + (currentPos.row - prevPos.row) * eased,
+      col: prevPos.col + (currentPos.col - prevPos.col) * eased,
+    }
   }
-  drawSprite(ctx, playerImg, interpPlayerPos.row, interpPlayerPos.col, player.value.facingLeft, theme.accent, timestamp, CELL, SPRITE_SIZE, squash)
 
-  if (timestamp >= invulnerableUntil && player.value.row <= front) {
-    triggerCaught('flood', timestamp)
+  function getShakeOffset(shakeStartTime, timestamp) {
+    const elapsed = timestamp - shakeStartTime
+    const duration = 300
+    if (elapsed < 0 || elapsed > duration) return { x: 0, y: 0 }
+    const decay = 1 - elapsed / duration
+    const magnitude = 6 * decay
+    return {
+      x: (Math.random() - 0.5) * magnitude,
+      y: (Math.random() - 0.5) * magnitude,
+    }
   }
-}
-function easeOutQuad(t) {
-  return t * (2 - t)
-}
 
-function getInterpolatedPos(prevPos, currentPos, animStartTime, duration, timestamp) {
-  const elapsed = timestamp - animStartTime
-  const t = Math.min(1, Math.max(0, elapsed / duration))
-  const eased = easeOutQuad(t)
-  return {
-    row: prevPos.row + (currentPos.row - prevPos.row) * eased,
-    col: prevPos.col + (currentPos.col - prevPos.col) * eased,
+  function drawMaze(timestamp) {
+    const level = currentLevel.value
+    if (!level || !ctx) return
+    const theme = currentTheme.value
+
+    const shake = getShakeOffset(shakeStartTime, timestamp)
+    ctx.save()
+    ctx.translate(shake.x, shake.y)
+
+    ctx.fillStyle = theme.wallBottom
+    ctx.fillRect(0, 0, canvasWidth.value, canvasHeight.value)
+
+    drawTiles(ctx, level, CELL, theme)
+    drawWallEdges(ctx, level, CELL, timestamp, 1, theme)
+    drawExit(ctx, level, CELL, timestamp, theme)
+
+    const front = floodFrontRow(level, timestamp)
+    floodPercent.value = Math.max(0, Math.min(100, Math.round(((front + 1) / level.maze.length) * 100)))
+    drawFlood(ctx, level, CELL, canvasWidth.value, timestamp, front, theme,
+      (brightness) => drawWallEdges(ctx, level, CELL, timestamp, brightness, theme))
+
+    if (floodPercent.value >= 70 && !floodWarningPlayed) {
+      playFloodWarningSound()
+      floodWarningPlayed = true
+    }
+
+    const squash = getSquashStretch(moveAnimStartTime, timestamp)
+    const interpPlayerPos = getInterpolatedPos(prevPlayerPos.value, player.value, moveAnimStartTime, MOVE_ANIM_DURATION, timestamp)
+
+    if (enemy.value) {
+      const interpEnemyPos = getInterpolatedPos(prevEnemyPos.value, enemy.value, enemyMoveAnimStartTime, ENEMY_MOVE_ANIM_DURATION, timestamp)
+      drawSprite(ctx, enemyImg, interpEnemyPos.row, interpEnemyPos.col, enemy.value.facingLeft, '#ff5f3a', timestamp, CELL, SPRITE_SIZE)
+    }
+    drawSprite(ctx, playerImg, interpPlayerPos.row, interpPlayerPos.col, player.value.facingLeft, theme.accent, timestamp, CELL, SPRITE_SIZE, squash)
+
+    ctx.restore()
+
+    const flashElapsed = timestamp - shakeStartTime
+    if (flashElapsed >= 0 && flashElapsed < 200) {
+      ctx.save()
+      ctx.globalAlpha = 0.35 * (1 - flashElapsed / 200)
+      ctx.fillStyle = '#ff3a3a'
+      ctx.fillRect(0, 0, canvasWidth.value, canvasHeight.value)
+      ctx.restore()
+    }
+
+    if (timestamp >= invulnerableUntil && player.value.row <= front) {
+      triggerCaught('flood', timestamp)
+    }
   }
-}
+
   function tryMove(deltaRow, deltaCol) {
     const level = currentLevel.value
-    if (!level || levelCompleteInfo.value) return
+    if (!level || levelCompleteInfo.value || isPaused.value) return 
     const newRow = player.value.row + deltaRow
     const newCol = player.value.col + deltaCol
 
@@ -239,10 +311,10 @@ function getInterpolatedPos(prevPos, currentPos, animStartTime, duration, timest
       player.value.col = newCol
       moveCount.value++
       playMoveSound()
-      moveAnimStartTime = performance.now()
+      moveAnimStartTime = now() 
 
       if (enemy.value && enemy.value.row === newRow && enemy.value.col === newCol) {
-        triggerCaught('guardian', performance.now())
+        triggerCaught('guardian', now()) 
         return
       }
 
@@ -294,9 +366,9 @@ function getInterpolatedPos(prevPos, currentPos, animStartTime, duration, timest
     else if (event.key === 'ArrowDown') tryMove(1, 0)
     else if (event.key === 'ArrowLeft') tryMove(0, -1)
     else if (event.key === 'ArrowRight') tryMove(0, 1)
+    else if (event.key === 'Escape' || event.key === ' ') togglePause() 
   }
 
-  // ---------- Joystick — delegated entirely to useJoystick ----------
   const {
     joystickBase,
     knobPosition,
@@ -310,9 +382,11 @@ function getInterpolatedPos(prevPos, currentPos, animStartTime, duration, timest
   let running = false
   let animFrameId = null
 
-  function loop(timestamp) {
+  function loop(rawTimestamp) { 
     if (!running) return
-    drawMaze(timestamp)
+    const timestamp = rawTimestamp - totalPausedMs 
+    elapsedSeconds.value = (Date.now() - levelstartTime.value) / 1000
+    drawMaze(timestamp) 
     animFrameId = requestAnimationFrame(loop)
   }
 
@@ -322,6 +396,7 @@ function getInterpolatedPos(prevPos, currentPos, animStartTime, duration, timest
     loadImages(() => {
       loadLevel(currentLevelIndex.value)
       window.addEventListener('keydown', handleKeydown)
+      document.addEventListener('visibilitychange', handleVisibilityChange)
       running = true
       animFrameId = requestAnimationFrame(loop)
     })
@@ -333,6 +408,7 @@ function getInterpolatedPos(prevPos, currentPos, animStartTime, duration, timest
     if (enemyIntervalId) clearInterval(enemyIntervalId)
     stopJoystick()
     window.removeEventListener('keydown', handleKeydown)
+    document.removeEventListener('visibilitychange', handleVisibilityChange) // ADDED
   }
 
   return {
@@ -355,5 +431,9 @@ function getInterpolatedPos(prevPos, currentPos, animStartTime, duration, timest
     TOTAL_LEVELS,
     soundEnabled,
     toggleSound,
+    moveCount,
+    elapsedSeconds,
+    isPaused,       
+    togglePause,    
   }
 }
