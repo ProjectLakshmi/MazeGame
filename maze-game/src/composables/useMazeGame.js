@@ -5,8 +5,8 @@ import { useSaveData } from '@/composables/useSaveData.js'
 import { useSound } from '@/composables/useSound.js'
 import { useJoystick } from '@/composables/useJoystick.js'
 import { mulberry32, generateMaze, findPath, pickEnemyPatrol } from '@/utils/mazeGenerator.js'
-import { getThemeForLevel } from '@/utils/worldThemes.js'
-import { drawTiles, drawWallEdges, drawExit, drawFlood, drawSprite, getSquashStretch } from '@/utils/mazeRenderer.js'
+import { getThemeForLevel, getWorldIntroForLevel } from '@/utils/worldThemes.js'
+import { drawTiles, drawWallEdges, drawExit, drawFlood, drawSprite, getSquashStretch, drawAmbientParticles } from '@/utils/mazeRenderer.js'
 
 export function useMazeGame() {
   let ctx = null
@@ -31,6 +31,7 @@ export function useMazeGame() {
   const isPaused = ref(false)
   let totalPausedMs = 0
   let pauseStartedAt = 0
+  const worldIntro = ref(null)
 
   function now() {
     return performance.now() - totalPausedMs
@@ -178,8 +179,23 @@ export function useMazeGame() {
     })
 
     startEnemyLoop()
-  }
 
+    const intro = getWorldIntroForLevel(index, TOTAL_LEVELS)
+    if(intro){
+      worldIntro.value = intro
+      pauseGame()
+    }
+  }
+  function dismissWorldIntro() {
+  worldIntro.value = null
+  if (isPaused.value) {
+    resumeGame()
+  } else if (!running) {
+    running = true
+    startEnemyLoop()
+    animFrameId = requestAnimationFrame(loop)
+  }
+}
   function resetPositions(level) {
     player.value = { row: level.start.row, col: level.start.col, facingLeft: false }
     prevPlayerPos.value = { row: level.start.row, col: level.start.col }
@@ -292,7 +308,7 @@ export function useMazeGame() {
 
     ctx.fillStyle = theme.wallBottom
     ctx.fillRect(0, 0, canvasWidth.value, canvasHeight.value)
-
+    drawAmbientParticles(ctx, canvasWidth.value, canvasHeight.value, timestamp, theme)
     drawTiles(ctx, level, CELL, theme)
     drawWallEdges(ctx, level, CELL, timestamp, 1, theme)
     drawExit(ctx, level, CELL, timestamp, theme)
@@ -476,6 +492,8 @@ export function useMazeGame() {
     moveCount,
     elapsedSeconds,
     isPaused,       
-    togglePause,    
+    togglePause,
+    worldIntro,
+    dismissWorldIntro    
   }
 }

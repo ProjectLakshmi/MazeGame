@@ -21,6 +21,8 @@ const {
   handleJoystickEnd,
   isPaused,
   togglePause,
+  worldIntro,
+  dismissWorldIntro
 } = useMazeGame()
 
 const confettiPieces = ref([])
@@ -97,6 +99,14 @@ onUnmounted(stopGame)
     :style="{ transform: `translate(${knobPosition.x}px, ${knobPosition.y}px)` }"
   ></div>
 </div>
+<div v-if="worldIntro" class="modal-backdrop world-intro-backdrop">
+    <div class="modal world-intro-modal">
+      <p class="world-eyebrow">New World</p>
+      <h2>{{ worldIntro.worldTitle }}</h2>
+      <p class="world-story">{{ worldIntro.story }}</p>
+      <button class="primary" @click="dismissWorldIntro">Enter</button>
+    </div>
+  </div>
 
 <div v-if="isPaused && !levelCompleteInfo" class="modal-backdrop"> 
   <div class="modal">
@@ -207,6 +217,23 @@ onUnmounted(stopGame)
   height: 8px;
   border-radius: 2px;
   animation: confetti-fall linear forwards;
+}
+.world-intro-modal {
+  max-width: 340px;
+}
+.world-eyebrow {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #52e3a4;
+  margin: 0 0 6px;
+}
+.world-story {
+  color: #b8c0cc;
+  font-size: 14px;
+  line-height: 1.5;
+  margin: 10px 0 18px;
 }
 @keyframes confetti-fall {
   0% { transform: translateY(0) rotate(0deg); opacity: 1; }
