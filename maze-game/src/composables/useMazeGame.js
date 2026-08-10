@@ -129,6 +129,7 @@ export function useMazeGame() {
     if (timestamp < invulnerableUntil) return
     invulnerableUntil = timestamp + 900
     playCaughtSound()
+    vibrate(120)
     caughtMessage.value = reason === 'flood' ? 'Swallowed by the flood' : 'Spotted by the guardian'
     shakeStartTime = timestamp
     resetPositions(currentLevel.value)
@@ -270,6 +271,7 @@ export function useMazeGame() {
 
     if (floodPercent.value >= 70 && !floodWarningPlayed) {
       playFloodWarningSound()
+      vibrate(80)
       floodWarningPlayed = true
     }
 
@@ -323,6 +325,7 @@ export function useMazeGame() {
         const stars = calculateStars(moveCount.value, seconds, level.maze.length)
         saveLevelProgress(currentLevelIndex.value, stars, moveCount.value, seconds)
         playLevelCompleteSound()
+        vibrate([60, 40, 60])
 
         if (enemyIntervalId) clearInterval(enemyIntervalId)
         running = false
@@ -409,6 +412,12 @@ export function useMazeGame() {
     stopJoystick()
     window.removeEventListener('keydown', handleKeydown)
     document.removeEventListener('visibilitychange', handleVisibilityChange) // ADDED
+  }
+
+  function vibrate(pattern){
+    if(typeof navigator !== 'undefined' && navigator.vibrate){
+      navigator.vibrate(pattern)
+    }
   }
 
   return {
