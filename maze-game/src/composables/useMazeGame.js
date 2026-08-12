@@ -25,7 +25,7 @@ export function useMazeGame() {
   const CHASE_DURATION_MS = 3000
   const CHASE_REPATH_INTERVAL_MS = 600
   let chaseUntil = 0
-  let lastCahseRepathAt = 0
+  let lastChaseRepathAt = 0
 
   // ---------- ADDED: pause/backgrounding time-freeze mechanism ----------
   const isPaused = ref(false)
@@ -397,9 +397,9 @@ export function useMazeGame() {
     return 1
   }
 
-  function isLevelUnlocked(index) {
+  function isLevelUnlocked(index, results) {
     if (index === 0) return true
-    const progress = progress ?? getProgress()
+    const progress = results  ?? getProgress()
     return !!progress[index - 1]
   }
 
