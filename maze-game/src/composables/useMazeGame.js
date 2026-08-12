@@ -306,13 +306,13 @@ export function useMazeGame() {
     ctx.save()
     ctx.translate(shake.x, shake.y)
 
-    ctx.fillStyle = theme.wallBottom
-    ctx.fillRect(0, 0, canvasWidth.value, canvasHeight.value)
-    drawAmbientParticles(ctx, canvasWidth.value, canvasHeight.value, timestamp, theme)
-    drawTiles(ctx, level, CELL, theme)
-    drawWallEdges(ctx, level, CELL, timestamp, 1, theme)
-    drawExit(ctx, level, CELL, timestamp, theme)
-    drawAmbientParticles(ctx, canvasWidth.value, canvasHeight.value, timestamp, theme, true)
+   drawThemeBackground(ctx, canvasWidth.value, canvasHeight.value, theme, timestamp)
+  drawTiles(ctx, level, CELL, theme)
+  drawWallTexture(ctx, level, CELL, theme, timestamp)
+  drawWallEdges(ctx, level, CELL, timestamp, 1, theme)
+  drawExit(ctx, level, CELL, timestamp, theme)
+  drawAmbientParticles(ctx, canvasWidth.value, canvasHeight.value, timestamp, theme)
+    
 
     const front = floodFrontRow(level, timestamp)
     floodPercent.value = Math.max(0, Math.min(100, Math.round(((front + 1) / level.maze.length) * 100)))

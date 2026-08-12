@@ -12,7 +12,10 @@ const THEMES = [
     floodTo: '#1a7a5e',
     particleType: 'fireflies', // ADDED
     particleSpeed: 0.015,      // ADDED
-    particleDensity: 14,       // ADDED
+    particleDensity: 14,    
+    wallTexture: 'vines',
+    wallRadius: 10,
+    bgPattern: 'moss'
   },
   {
     name: 'Ember',
@@ -27,7 +30,10 @@ const THEMES = [
     floodTo: '#7a3a1a',
     particleType: 'embers', // ADDED
     particleSpeed: 0.03,    // ADDED
-    particleDensity: 20,    // ADDED
+    particleDensity: 20,
+    wallTexture: 'cracks',
+    wallRadius: 4,
+    bgPattern: 'embercore'    // ADDED
   },
   {
     name: 'Void',
@@ -42,7 +48,10 @@ const THEMES = [
     floodTo: '#3a1a7a',
     particleType: 'motes', // ADDED
     particleSpeed: 0.01,   // ADDED
-    particleDensity: 24,   // ADDED
+    particleDensity: 24, 
+    wallTexture: 'facets',
+    wallRadius: 0,
+    bgPattern: 'starfield'   
   },
 ]
 
