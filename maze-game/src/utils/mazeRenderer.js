@@ -155,3 +155,39 @@ export function drawSprite(ctx, img, row, col, facingLeft, glowColor, timestamp,
   ctx.drawImage(img, -SPRITE_SIZE / 2, -SPRITE_SIZE / 2, SPRITE_SIZE, SPRITE_SIZE)
   ctx.restore()
 }
+
+
+export function drawAmbientParticles(ctx, canvasWidth, canvasHeight, timestamp, theme) {
+  const count = theme.particleDensity || 16
+  const speed = theme.particleSpeed || 0.02
+
+  ctx.save()
+  for (let i = 0; i < count; i++) {
+    const seed = i * 137.5 
+
+    const cycleHeight = canvasHeight + 40
+    const riseOffset = (timestamp * speed + seed * 3) % cycleHeight
+    const y = canvasHeight - riseOffset + 20
+    const sway = Math.sin(timestamp / 1400 + seed) * 12
+    const x = ((seed * 47) % canvasWidth) + sway
+
+    const flicker = 0.4 + Math.sin(timestamp / 600 + seed) * 0.3
+    const alpha = Math.max(0, Math.min(0.7, flicker))
+
+    let size = 1.6
+    if (theme.particleType === 'embers') size = 1.5 + Math.sin(seed) * 1.2
+    if (theme.particleType === 'motes') size = 1 + Math.sin(seed * 2) * 0.6
+    if (theme.particleType === 'fireflies') size = 1.8 + Math.sin(seed * 1.5) * 0.8
+
+    ctx.globalAlpha = alpha
+    ctx.fillStyle = theme.accent
+    if (theme.particleType === 'fireflies' || theme.particleType === 'embers') {
+      ctx.shadowColor = theme.accent
+      ctx.shadowBlur = size * 3
+    }
+    ctx.beginPath()
+    ctx.arc(x, y, size, 0, Math.PI * 2)
+    ctx.fill()
+  }
+  ctx.restore()
+}
