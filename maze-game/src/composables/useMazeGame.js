@@ -312,6 +312,7 @@ export function useMazeGame() {
     drawTiles(ctx, level, CELL, theme)
     drawWallEdges(ctx, level, CELL, timestamp, 1, theme)
     drawExit(ctx, level, CELL, timestamp, theme)
+    drawAmbientParticles(ctx, canvasWidth.value, canvasHeight.value, timestamp, theme, true)
 
     const front = floodFrontRow(level, timestamp)
     floodPercent.value = Math.max(0, Math.min(100, Math.round(((front + 1) / level.maze.length) * 100)))

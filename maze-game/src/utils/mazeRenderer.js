@@ -1,5 +1,5 @@
 const TILE_RADIUS = 6
-let gradientCache = { key: null, wallGradient: null, floorGradient: null }
+
 
 function roundedRect(ctx, x, y, w, h, r) {
   ctx.beginPath()
@@ -32,33 +32,18 @@ function hexToRgba(hex, alpha) {
   const b = parseInt(hex.slice(5, 7), 16)
   return `rgba(${r}, ${g}, ${b}, ${alpha})`
 }
-function getTileGradients(ctx, CELL, theme) {
-  const key = `${theme.wallTop}|${theme.wallBottom}|${theme.floorTop}|${theme.floorBottom}|${CELL}`
-  if (gradientCache.key === key) return gradientCache
 
-  const wallGradient = ctx.createLinearGradient(0, 0, 0, CELL)
-  wallGradient.addColorStop(0, theme.wallTop)
-  wallGradient.addColorStop(1, theme.wallBottom)
-
-  const floorGradient = ctx.createLinearGradient(0, 0, 0, CELL)
-  floorGradient.addColorStop(0, theme.floorTop)
-  floorGradient.addColorStop(1, theme.floorBottom)
-
-  gradientCache = { key, wallGradient, floorGradient }
-  return gradientCache
-}
 
 export function drawTiles(ctx, level, CELL, theme) {
-  const { wallGradient, floorGradient } = getTileGradients(ctx, CELL, theme)
   for (let row = 0; row < level.maze.length; row++) {
     for (let col = 0; col < level.maze[row].length; col++) {
       const x = col * CELL
       const y = row * CELL
       const isWall = level.maze[row][col] === 1
       ctx.save()
-      ctx.translate(x,y)
+      ctx.translate(x, y)
 
-      const gradient = ctx.createLinearGradient(x, y, x, y + CELL)
+      const gradient = ctx.createLinearGradient(0, 0, 0, CELL)
       if (isWall) {
         gradient.addColorStop(0, theme.wallTop)
         gradient.addColorStop(1, theme.wallBottom)
@@ -66,8 +51,8 @@ export function drawTiles(ctx, level, CELL, theme) {
         gradient.addColorStop(0, theme.floorTop)
         gradient.addColorStop(1, theme.floorBottom)
       }
-      ctx.fillStyle = isWall ? wallGradient : floorGradient
-      roundedRect(ctx,  1,  1, CELL - 2, CELL - 2, TILE_RADIUS)
+      ctx.fillStyle = gradient
+      roundedRect(ctx, 1, 1, CELL - 2, CELL - 2, TILE_RADIUS)
       ctx.fill()
       ctx.restore()
     }
