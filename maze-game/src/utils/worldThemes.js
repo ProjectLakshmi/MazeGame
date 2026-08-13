@@ -54,10 +54,10 @@ const THEMES = [
     bgPattern: 'starfield'   
   },
 ]
+const LEVELS_PER_WORLD = 3
 
 export function getThemeForLevel(levelIndex, totalLevels) {
-  const perWorld = Math.ceil(totalLevels / THEMES.length)
-  const worldIndex = Math.min(THEMES.length - 1, Math.floor(levelIndex / perWorld))
+  const worldIndex = Math.min(THEMES.length - 1, Math.floor(levelIndex / LEVELS_PER_WORLD))
   return THEMES[worldIndex]
 }
 
@@ -66,11 +66,10 @@ export function getAllThemes() {
 }
 
 // ADDED — returns intro info only when levelIndex is the FIRST level of a new world, else null
-export function getWorldIntroForLevel(levelIndex, totalLevels) {
-  const perWorld = Math.ceil(totalLevels / THEMES.length)
-  const isFirstLevelOfWorld = levelIndex % perWorld === 0
+export function getWorldIntroForLevel(levelIndex) {
+  const isFirstLevelOfWorld = levelIndex % LEVELS_PER_WORLD === 0
   if (!isFirstLevelOfWorld) return null
 
-  const theme = getThemeForLevel(levelIndex, totalLevels)
+  const theme = getThemeForLevel(levelIndex)
   return { worldTitle: theme.worldTitle, story: theme.story }
 }

@@ -12,7 +12,7 @@ export function useMazeGame() {
   let ctx = null
   const canvasEl = ref(null)
   const TOTAL_LEVELS = 12
-  const currentTheme = ref(getThemeForLevel(0, TOTAL_LEVELS))
+  const currentTheme = ref(getThemeForLevel(0))
   let moveAnimStartTime = 0
   const prevPlayerPos = ref({ row: 0, col: 0 })
   const prevEnemyPos = ref({ row: 0, col: 0 })
@@ -157,7 +157,7 @@ export function useMazeGame() {
     const level = generateMaze(roomsWide, roomsHigh, rng)
 
     currentLevel.value = level
-    currentTheme.value = getThemeForLevel(index, TOTAL_LEVELS)
+    currentTheme.value = getThemeForLevel(index)
     resetPositions(level)
     levelStartTime = now() 
     invulnerableUntil = 0
@@ -180,7 +180,7 @@ export function useMazeGame() {
 
     startEnemyLoop()
 
-    const intro = getWorldIntroForLevel(index, TOTAL_LEVELS)
+    const intro = getWorldIntroForLevel(index)
     if(intro){
       worldIntro.value = intro
       pauseGame()
