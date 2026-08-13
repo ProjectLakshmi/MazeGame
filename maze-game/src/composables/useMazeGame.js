@@ -1,12 +1,12 @@
 import { ref, computed } from 'vue'
-import playerSprite from '@/asset/player.png'
-import enemySprite from '@/asset/enemy.png'
+import playerSprite from '@/asset/playerSheet.png'
+import enemySprite from '@/asset/enemySheet.png'
 import { useSaveData } from '@/composables/useSaveData.js'
 import { useSound } from '@/composables/useSound.js'
 import { useJoystick } from '@/composables/useJoystick.js'
 import { mulberry32, generateMaze, findPath, pickEnemyPatrol } from '@/utils/mazeGenerator.js'
 import { getThemeForLevel, getWorldIntroForLevel } from '@/utils/worldThemes.js'
-import { drawTiles, drawWallEdges, drawExit, drawFlood, drawSprite, getSquashStretch, drawAmbientParticles, drawWallTexture, drawThemeBackground } from '@/utils/mazeRenderer.js'
+import { drawTiles, drawWallEdges, drawExit, drawFlood, drawSprite, getSquashStretch, drawAmbientParticles, drawWallTexture, drawThemeBackground, WALK_FRAMES  } from '@/utils/mazeRenderer.js'
 
 export function useMazeGame() {
   let ctx = null
@@ -330,9 +330,9 @@ export function useMazeGame() {
 
     if (enemy.value) {
       const interpEnemyPos = getInterpolatedPos(prevEnemyPos.value, enemy.value, enemyMoveAnimStartTime, ENEMY_MOVE_ANIM_DURATION, timestamp)
-      drawSprite(ctx, enemyImg, interpEnemyPos.row, interpEnemyPos.col, enemy.value.facingLeft, '#ff5f3a', timestamp, CELL, SPRITE_SIZE)
+      drawSprite(ctx, enemyImg, interpEnemyPos.row, interpEnemyPos.col, enemy.value.facingLeft, '#ff5f3a', timestamp, CELL, SPRITE_SIZE, { scaleX: 1, scaleY: 1 }, getEnemyFrame(timestamp))
     }
-    drawSprite(ctx, playerImg, interpPlayerPos.row, interpPlayerPos.col, player.value.facingLeft, theme.accent, timestamp, CELL, SPRITE_SIZE, squash)
+    drawSprite(ctx, playerImg, interpPlayerPos.row, interpPlayerPos.col, player.value.facingLeft, theme.accent, timestamp, CELL, SPRITE_SIZE, squash, getPlayerFrame(timestamp))
 
     ctx.restore()
 
@@ -414,13 +414,58 @@ export function useMazeGame() {
     }
   }
 
-  function handleKeydown(event) {
-    if (event.key === 'ArrowUp') tryMove(-1, 0)
-    else if (event.key === 'ArrowDown') tryMove(1, 0)
-    else if (event.key === 'ArrowLeft') tryMove(0, -1)
-    else if (event.key === 'ArrowRight') tryMove(0, 1)
-    else if (event.key === 'Escape' || event.key === ' ') togglePause() 
+ const KEY_REPEAT_MS = 90
+let keyRepeatIntervalId = null
+let activeKeyMove = null
+
+const KEY_MOVE_MAP = {
+  ArrowUp: [-1, 0],
+  ArrowDown: [1, 0],
+  ArrowLeft: [0, -1],
+  ArrowRight: [0, 1],
+}
+
+function handleKeydown(event) {
+  if (event.key === 'Escape' || event.key === ' ') {
+    togglePause()
+    return
   }
+
+  const move = KEY_MOVE_MAP[event.key]
+  if (!move) return
+  event.preventDefault() // stop OS key-repeat from double-firing alongside our own interval
+
+  if (activeKeyMove === event.key) return // already repeating this direction, ignore OS auto-repeat keydowns
+
+  activeKeyMove = event.key
+  tryMove(move[0], move[1])
+
+  if (keyRepeatIntervalId) clearInterval(keyRepeatIntervalId)
+  keyRepeatIntervalId = setInterval(() => tryMove(move[0], move[1]), KEY_REPEAT_MS)
+}
+
+function handleKeyup(event) {
+  if (event.key === activeKeyMove) {
+    activeKeyMove = null
+    if (keyRepeatIntervalId) {
+      clearInterval(keyRepeatIntervalId)
+      keyRepeatIntervalId = null
+    }
+  }
+}
+
+const WALK_FRAME_MS = 90
+const PLAYER_IDLE_WINDOW_MS = 220 
+
+function getPlayerFrame(timestamp) {
+  const sinceMove = timestamp - moveAnimStartTime
+  if (sinceMove < 0 || sinceMove > PLAYER_IDLE_WINDOW_MS) return 'idle'
+  return WALK_FRAMES[Math.floor(timestamp / WALK_FRAME_MS) % WALK_FRAMES.length]
+}
+
+function getEnemyFrame(timestamp) {
+  return WALK_FRAMES[Math.floor(timestamp / WALK_FRAME_MS) % WALK_FRAMES.length]
+}
 
   const {
     joystickBase,
@@ -429,7 +474,7 @@ export function useMazeGame() {
     handleJoystickMove,
     handleJoystickEnd,
     stopJoystick,
-  } = useJoystick(tryMove, { radius: 50, deadZone: 6, repeatMs: 130 })
+  } = useJoystick(tryMove, { radius: 50, deadZone: 6, repeatMs: 90 })
 
   // ---------- Game loop ----------
   let running = false
@@ -449,6 +494,7 @@ export function useMazeGame() {
     loadImages(() => {
       loadLevel(currentLevelIndex.value)
       window.addEventListener('keydown', handleKeydown)
+      window.addEventListener('keyup', handleKeyup)
       document.addEventListener('visibilitychange', handleVisibilityChange)
       running = true
       animFrameId = requestAnimationFrame(loop)
@@ -461,7 +507,8 @@ export function useMazeGame() {
     if (enemyIntervalId) clearInterval(enemyIntervalId)
     stopJoystick()
     window.removeEventListener('keydown', handleKeydown)
-    document.removeEventListener('visibilitychange', handleVisibilityChange) // ADDED
+    window.removeEventListener('keyup', handleKeyup)
+    document.removeEventListener('visibilitychange', handleVisibilityChange) 
   }
 
   function vibrate(pattern){

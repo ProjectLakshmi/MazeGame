@@ -263,10 +263,11 @@ export function getSquashStretch(moveAnimStartTime, timestamp) {
   return { scaleX: 1 + bounce, scaleY: 1 - bounce }
 }
 
-export function drawSprite(ctx, img, row, col, facingLeft, glowColor, timestamp, CELL, SPRITE_SIZE, squash = { scaleX: 1, scaleY: 1 }) {
+export function drawSprite(ctx, img, row, col, facingLeft, glowColor, timestamp, CELL, SPRITE_SIZE, squash = { scaleX: 1, scaleY: 1 }, frameName = 'idle') {
   const centerX = col * CELL + CELL / 2
   const centerY = row * CELL + CELL / 2
   const pulse = 8 + Math.sin(timestamp / 220) * 4
+
 
   ctx.save()
   ctx.globalAlpha = 0.28
@@ -274,17 +275,22 @@ export function drawSprite(ctx, img, row, col, facingLeft, glowColor, timestamp,
   ctx.shadowBlur = pulse + 6
   ctx.fillStyle = glowColor
   ctx.beginPath()
-  ctx.arc(centerX, centerY, SPRITE_SIZE / 2 + pulse / 2, 0, Math.PI * 2)
+  ctx.arc(centerX, centerY + CELL * 0.28, SPRITE_SIZE / 2 + pulse / 2, 0, Math.PI * 2)
   ctx.fill()
   ctx.restore()
 
+  const frame = ATLAS[frameName] || ATLAS.idle
+  const aspect = frame.width / frame.height
+  const drawH = CELL * 1.35          
+  const drawW = drawH * aspect
+  const feetY = centerY + CELL / 2 - 2 
+
   ctx.save()
-  ctx.translate(centerX, centerY)
+  ctx.translate(centerX, feetY)
   ctx.scale((facingLeft ? -1 : 1) * squash.scaleX, squash.scaleY)
-  ctx.drawImage(img, -SPRITE_SIZE / 2, -SPRITE_SIZE / 2, SPRITE_SIZE, SPRITE_SIZE)
+  ctx.drawImage(img, frame.x, frame.y, frame.width, frame.height, -drawW / 2, -drawH, drawW, drawH)
   ctx.restore()
 }
-
 export function drawAmbientParticles(ctx, canvasWidth, canvasHeight, timestamp, theme) {
   const count = theme.particleDensity || 16
   const speed = theme.particleSpeed || 0.02
@@ -319,3 +325,26 @@ export function drawAmbientParticles(ctx, canvasWidth, canvasHeight, timestamp, 
   }
   ctx.restore()
 }
+
+// Moving Sprites//
+const ATLAS = {
+  idle:       { x: 0,   y: 0,   width: 96, height: 128 },
+  jump:       { x: 96,  y: 0,   width: 96, height: 128 },
+  fall:       { x: 192, y: 0,   width: 96, height: 128 },
+  hurt:       { x: 384, y: 0,   width: 96, height: 128 },
+  cheer0:     { x: 672, y: 0,   width: 96, height: 128 },
+  cheer1:     { x: 768, y: 0,   width: 96, height: 128 },
+  run0:       { x: 576, y: 256, width: 96, height: 128 },
+  run1:       { x: 672, y: 256, width: 96, height: 128 },
+  run2:       { x: 768, y: 256, width: 96, height: 128 },
+  walk0:      { x: 0,   y: 512, width: 96, height: 128 },
+  walk1:      { x: 96,  y: 512, width: 96, height: 128 },
+  walk2:      { x: 192, y: 512, width: 96, height: 128 },
+  walk3:      { x: 288, y: 512, width: 96, height: 128 },
+  walk4:      { x: 384, y: 512, width: 96, height: 128 },
+  walk5:      { x: 480, y: 512, width: 96, height: 128 },
+  walk6:      { x: 576, y: 512, width: 96, height: 128 },
+  walk7:      { x: 672, y: 512, width: 96, height: 128 },
+}
+
+export const WALK_FRAMES = ['walk0', 'walk1', 'walk2', 'walk3', 'walk4', 'walk5', 'walk6', 'walk7']
