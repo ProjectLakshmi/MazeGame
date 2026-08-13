@@ -6,7 +6,7 @@ import { useSound } from '@/composables/useSound.js'
 import { useJoystick } from '@/composables/useJoystick.js'
 import { mulberry32, generateMaze, findPath, pickEnemyPatrol } from '@/utils/mazeGenerator.js'
 import { getThemeForLevel, getWorldIntroForLevel } from '@/utils/worldThemes.js'
-import { drawTiles, drawWallEdges, drawExit, drawFlood, drawSprite, getSquashStretch, drawAmbientParticles } from '@/utils/mazeRenderer.js'
+import { drawTiles, drawWallEdges, drawExit, drawFlood, drawSprite, getSquashStretch, drawAmbientParticles, drawWallTexture, drawThemeBackground } from '@/utils/mazeRenderer.js'
 
 export function useMazeGame() {
   let ctx = null

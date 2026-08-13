@@ -1,6 +1,5 @@
 const TILE_RADIUS = 6
 
-
 function roundedRect(ctx, x, y, w, h, r) {
   ctx.beginPath()
   ctx.moveTo(x + r, y)
@@ -9,6 +8,18 @@ function roundedRect(ctx, x, y, w, h, r) {
   ctx.arcTo(x, y + h, x, y, r)
   ctx.arcTo(x, y, x + w, y, r)
   ctx.closePath()
+}
+
+function hexToRgba(hex, alpha) {
+  const r = parseInt(hex.slice(1, 3), 16)
+  const g = parseInt(hex.slice(3, 5), 16)
+  const b = parseInt(hex.slice(5, 7), 16)
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`
+}
+
+function seededRandom(seed) {
+  const x = Math.sin(seed * 12.9898) * 43758.5453
+  return x - Math.floor(x)
 }
 
 export function drawWallEdges(ctx, level, CELL, timestamp, brightness, theme) {
@@ -26,24 +37,14 @@ export function drawWallEdges(ctx, level, CELL, timestamp, brightness, theme) {
   }
 }
 
-function hexToRgba(hex, alpha) {
-  const r = parseInt(hex.slice(1, 3), 16)
-  const g = parseInt(hex.slice(3, 5), 16)
-  const b = parseInt(hex.slice(5, 7), 16)
-  return `rgba(${r}, ${g}, ${b}, ${alpha})`
-}
-
-
 export function drawTiles(ctx, level, CELL, theme) {
   for (let row = 0; row < level.maze.length; row++) {
     for (let col = 0; col < level.maze[row].length; col++) {
       const x = col * CELL
       const y = row * CELL
       const isWall = level.maze[row][col] === 1
-      ctx.save()
-      ctx.translate(x, y)
 
-      const gradient = ctx.createLinearGradient(0, 0, 0, CELL)
+      const gradient = ctx.createLinearGradient(x, y, x, y + CELL)
       if (isWall) {
         gradient.addColorStop(0, theme.wallTop)
         gradient.addColorStop(1, theme.wallBottom)
@@ -52,10 +53,9 @@ export function drawTiles(ctx, level, CELL, theme) {
         gradient.addColorStop(1, theme.floorBottom)
       }
       ctx.fillStyle = gradient
-       const radius = isWall ? (theme.wallRadius ?? TILE_RADIUS) : TILE_RADIUS
-      roundedRect(ctx, 1, 1, CELL - 2, CELL - 2, radius)
+      const radius = isWall ? (theme.wallRadius ?? TILE_RADIUS) : TILE_RADIUS
+      roundedRect(ctx, x + 1, y + 1, CELL - 2, CELL - 2, radius)
       ctx.fill()
-      ctx.restore()
     }
   }
 }
@@ -86,7 +86,7 @@ export function drawWallTexture(ctx, level, CELL, theme, timestamp) {
 function drawVineTexture(ctx, CELL, seed, theme) {
   const r1 = seededRandom(seed)
   const r2 = seededRandom(seed + 1)
-  if (r1 < 0.35) return // not every wall gets a vine — keeps it subtle
+  if (r1 < 0.35) return
 
   ctx.strokeStyle = hexToRgba(theme.accent, 0.22)
   ctx.lineWidth = 1.5
@@ -143,9 +143,64 @@ function drawFacetTexture(ctx, CELL, seed, theme) {
   ctx.stroke()
 }
 
-function seededRandom(seed) {
-  const x = Math.sin(seed * 12.9898) * 43758.5453
-  return x - Math.floor(x)
+export function drawThemeBackground(ctx, canvasWidth, canvasHeight, theme, timestamp) {
+  ctx.save()
+
+  if (theme.bgPattern === 'embercore') {
+    const glow = ctx.createRadialGradient(
+      canvasWidth / 2, canvasHeight, 0,
+      canvasWidth / 2, canvasHeight, Math.max(1, canvasHeight * 0.9)
+    )
+    glow.addColorStop(0, theme.wallBottom)
+    glow.addColorStop(0.6, theme.wallBottom)
+    glow.addColorStop(1, '#000000')
+    ctx.fillStyle = glow
+    ctx.fillRect(0, 0, canvasWidth, canvasHeight)
+
+    ctx.globalAlpha = 0.05
+    ctx.strokeStyle = theme.accent
+    for (let i = 0; i < 6; i++) {
+      const yBase = canvasHeight - (i * canvasHeight) / 6
+      ctx.beginPath()
+      for (let x = 0; x <= canvasWidth; x += 8) {
+        const y = yBase + Math.sin(x / 30 + timestamp / 700 + i) * 6
+        if (x === 0) ctx.moveTo(x, y)
+        else ctx.lineTo(x, y)
+      }
+      ctx.stroke()
+    }
+  } else if (theme.bgPattern === 'starfield') {
+    ctx.fillStyle = theme.wallBottom
+    ctx.fillRect(0, 0, canvasWidth, canvasHeight)
+
+    for (let i = 0; i < 60; i++) {
+      const seed = i * 53.7
+      const x = seededRandom(seed) * canvasWidth
+      const y = seededRandom(seed + 1) * canvasHeight
+      ctx.globalAlpha = 0.2 + Math.abs(Math.sin(timestamp / 800 + seed)) * 0.5
+      ctx.fillStyle = theme.accent
+      ctx.beginPath()
+      ctx.arc(x, y, 0.8, 0, Math.PI * 2)
+      ctx.fill()
+    }
+  } else {
+    ctx.fillStyle = theme.wallBottom
+    ctx.fillRect(0, 0, canvasWidth, canvasHeight)
+
+    ctx.globalAlpha = 0.06
+    ctx.fillStyle = theme.accent
+    for (let i = 0; i < 30; i++) {
+      const seed = i * 41.3
+      const x = seededRandom(seed) * canvasWidth
+      const y = seededRandom(seed + 1) * canvasHeight
+      const size = 6 + seededRandom(seed + 2) * 10
+      ctx.beginPath()
+      ctx.arc(x, y, size, 0, Math.PI * 2)
+      ctx.fill()
+    }
+  }
+
+  ctx.restore()
 }
 
 export function drawExit(ctx, level, CELL, timestamp, theme) {
@@ -204,7 +259,7 @@ export function getSquashStretch(moveAnimStartTime, timestamp) {
   if (elapsed < 0 || elapsed > duration) return { scaleX: 1, scaleY: 1 }
 
   const t = elapsed / duration
-  const bounce = Math.sin(t * Math.PI) * 0.18 // peak squash amount
+  const bounce = Math.sin(t * Math.PI) * 0.18
   return { scaleX: 1 + bounce, scaleY: 1 - bounce }
 }
 
@@ -230,14 +285,13 @@ export function drawSprite(ctx, img, row, col, facingLeft, glowColor, timestamp,
   ctx.restore()
 }
 
-
 export function drawAmbientParticles(ctx, canvasWidth, canvasHeight, timestamp, theme) {
   const count = theme.particleDensity || 16
   const speed = theme.particleSpeed || 0.02
 
   ctx.save()
   for (let i = 0; i < count; i++) {
-    const seed = i * 137.5 
+    const seed = i * 137.5
 
     const cycleHeight = canvasHeight + 40
     const riseOffset = (timestamp * speed + seed * 3) % cycleHeight
@@ -263,66 +317,5 @@ export function drawAmbientParticles(ctx, canvasWidth, canvasHeight, timestamp, 
     ctx.arc(x, y, size, 0, Math.PI * 2)
     ctx.fill()
   }
-  ctx.restore()
-}
-
-export function drawThemeBackground(ctx, canvasWidth, canvasHeight, theme, timestamp) {
-  ctx.save()
-
-  if (theme.bgPattern === 'embercore') {
-    const glow = ctx.createRadialGradient(
-      canvasWidth / 2, canvasHeight, 0,
-      canvasWidth / 2, canvasHeight, canvasHeight * 0.9
-    )
-    glow.addColorStop(0, theme.wallBottom)
-    glow.addColorStop(0.6, theme.wallBottom)
-    glow.addColorStop(1, '#000000')
-    ctx.fillStyle = glow
-    ctx.fillRect(0, 0, canvasWidth, canvasHeight)
-
-    ctx.globalAlpha = 0.05
-    ctx.strokeStyle = theme.accent
-    for (let i = 0; i < 6; i++) {
-      const yBase = canvasHeight - (i * canvasHeight) / 6
-      ctx.beginPath()
-      for (let x = 0; x <= canvasWidth; x += 8) {
-        const y = yBase + Math.sin(x / 30 + timestamp / 700 + i) * 6
-        if (x === 0) ctx.moveTo(x, y)
-        else ctx.lineTo(x, y)
-      }
-      ctx.stroke()
-    }
-  } else if (theme.bgPattern === 'starfield') {
-    ctx.fillStyle = theme.wallBottom
-    ctx.fillRect(0, 0, canvasWidth, canvasHeight)
-
-    for (let i = 0; i < 60; i++) {
-      const seed = i * 53.7
-      const x = seededRandom(seed) * canvasWidth
-      const y = seededRandom(seed + 1) * canvasHeight
-      ctx.globalAlpha = 0.2 + Math.abs(Math.sin(timestamp / 800 + seed)) * 0.5
-      ctx.fillStyle = theme.accent
-      ctx.beginPath()
-      ctx.arc(x, y, 0.8, 0, Math.PI * 2)
-      ctx.fill()
-    }
-  } else {
-    // 'moss' (default)
-    ctx.fillStyle = theme.wallBottom
-    ctx.fillRect(0, 0, canvasWidth, canvasHeight)
-
-    ctx.globalAlpha = 0.06
-    ctx.fillStyle = theme.accent
-    for (let i = 0; i < 30; i++) {
-      const seed = i * 41.3
-      const x = seededRandom(seed) * canvasWidth
-      const y = seededRandom(seed + 1) * canvasHeight
-      const size = 6 + seededRandom(seed + 2) * 10
-      ctx.beginPath()
-      ctx.arc(x, y, size, 0, Math.PI * 2)
-      ctx.fill()
-    }
-  }
-
   ctx.restore()
 }
