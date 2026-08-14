@@ -27,7 +27,7 @@ const {
   endlessDepth,
   endlessGameOver,
   startEndlessMode,
-  resatrtEndless
+  restartEndless,
 } = useMazeGame()
 
 const confettiPieces = ref([])
