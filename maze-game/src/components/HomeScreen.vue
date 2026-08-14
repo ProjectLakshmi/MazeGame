@@ -6,9 +6,10 @@ const emit = defineEmits(['start','settings', 'continue','endless'])
 
 const showHowToPlay = ref(false)
 const difficulty = ref('normal')
-const { getBestLevelReached, getLastLevel, getBestEndlessDepth } = useSaveData()
+const { getBestLevelReached, getLastLevel, getEndlessBest } = useSaveData()
 const bestLevel = ref(getBestLevelReached())
 const lastLevel = computed(()=> getLastLevel())
+const bestEndlessDepth = ref(getEndlessBest())
 
 const difficulties = [
   { id: 'easy', label: 'Easy', note: 'Smaller mazes, slower patrol' },
@@ -81,6 +82,9 @@ function animatePreview(timestamp) {
   drawPreview(progress)
   animationFrameId = requestAnimationFrame(animatePreview)
 }
+function handleEndless() {
+  emit('endless')
+}
 
 onMounted(() => {
   animationFrameId = requestAnimationFrame(animatePreview)
@@ -110,10 +114,11 @@ onUnmounted(() => {
         {{ d.label }}
       </button>
     </div>
-    <button v-if="lastLevel !== null" class="continue-btn" @click="handleContinue"> <!-- ADDED -->
+    <button v-if="lastLevel !== null" class="continue-btn" @click="handleContinue">
   Continue — Level {{ lastLevel + 1 }}
 </button>
     <button class="start-btn" @click="handleStart">Start Game</button>
+    <button class="endless-btn" @click="handleEndless">Endless Mode</button>
     <button class="settings-btn" @click="$emit('settings')">⚙ Settings</button>
     <button class="howto-toggle" @click="showHowToPlay = !showHowToPlay">
       {{ showHowToPlay ? 'Hide instructions' : 'How to play' }}
