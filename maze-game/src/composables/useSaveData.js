@@ -1,6 +1,7 @@
 const SETTINGS_KEY = 'mazeSettings'
 const PROGRESS_KEY = 'mazeResults'
-const LAST_LEVEL_KEY = 'mazeLastLevel' // ADDED
+const LAST_LEVEL_KEY = 'mazeLastLevel' 
+const ENDLESS_BEST_KEY = 'mazeEndlessBest' 
 
 const DEFAULT_SETTINGS = {
     soundEnabled: true,
@@ -72,11 +73,29 @@ function getLastLevel(){
 function resetProgress(){
     localStorage.removeItem(PROGRESS_KEY)
 }
+function getEndlessBest(){
+    try{
+        const raw = localStorage.getItem(ENDLESS_BEST_KEY)
+        return raw ? Number(raw) : 0
+    }catch{
+        return 0
+    }
+}
 
+function saveEndlessBest(depth){
+    const best = Math.max(getEndlessBest(), depth)
+    try{
+        localStorage.setItem(ENDLESS_BEST_KEY, String(best))
+    }catch{
+        
+    }
+    return best
+}
 function resetAll(){
     localStorage.removeItem(SETTINGS_KEY)
     localStorage.removeItem(PROGRESS_KEY)
     localStorage.removeItem(LAST_LEVEL_KEY) 
+    localStorage.removeItem(ENDLESS_BEST_KEY) 
     localStorage.removeItem('mazeSoundEnabled')
 }
 
@@ -89,6 +108,8 @@ export const useSaveData = () => {
     getBestLevelReached,
     saveLastLevel,   
     getLastLevel, 
+    getEndlessBest,
+    saveEndlessBest,
     resetProgress,
     resetAll,
     }

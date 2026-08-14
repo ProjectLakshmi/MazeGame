@@ -2,7 +2,7 @@
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useMazeGame } from '@/composables/useMazeGame'
 
-const props = defineProps({ startLevel: { type: Number, default: 0 } })
+const props = defineProps({ startLevel: { type: Number, default: 0 },mode :{type:String, default: 'story'} })
 const emit = defineEmits(['backToLevelSelect'])
 
 const {
@@ -22,7 +22,12 @@ const {
   isPaused,
   togglePause,
   worldIntro,
-  dismissWorldIntro
+  dismissWorldIntro,
+  gameMode,
+  endlessDepth,
+  endlessGameOver,
+  startEndlessMode,
+  resatrtEndless
 } = useMazeGame()
 
 const confettiPieces = ref([])
@@ -48,7 +53,10 @@ watch(levelCompleteInfo, (newVal) => {
   if (newVal) burstConfetti()
 })
 
-onMounted(() => startGame(props.startLevel))
+onMounted(() => {
+  if (props.mode === 'endless') startEndlessMode()
+  else startGame(props.startLevel)
+})
 onUnmounted(stopGame)
 </script>
 
@@ -60,7 +68,8 @@ onUnmounted(stopGame)
     <button class="sound-btn" @click="toggleSound">{{ soundEnabled ? '🔊' : '🔇' }}</button>
   </div>
   </div>
-  <h2>Level {{ currentLevelIndex + 1 }}</h2>
+<h2 v-if="gameMode === 'story'">Level {{ currentLevelIndex + 1 }}</h2>
+<h2 v-else>Depth {{ endlessDepth + 1 }}</h2>
 
   <div class="canvas-wrap">
     <canvas ref="canvasEl"></canvas>
@@ -117,6 +126,17 @@ onUnmounted(stopGame)
     </div>
   </div>
 </div>
+<div v-if="endlessGameOver" class="modal-backdrop">
+    <div class="modal">
+      <h2>Run Over</h2>
+      <p class="stats">You reached depth {{ endlessGameOver.depth }}</p>
+      <p class="stats">Best: {{ endlessGameOver.best }}</p>
+      <div class="modal-actions">
+        <button class="secondary" @click="emit('backToLevelSelect')">Home</button>
+        <button class="primary" @click="restartEndless">Try Again</button>
+      </div>
+    </div>
+  </div>
 
   <div v-if="levelCompleteInfo" class="modal-backdrop">
     <div class="modal">
@@ -234,6 +254,22 @@ onUnmounted(stopGame)
   font-size: 14px;
   line-height: 1.5;
   margin: 10px 0 18px;
+}
+.endless-btn {
+  padding: 12px 40px;
+  font-size: 15px;
+  font-weight: 600;
+  font-family: 'Space Grotesk', sans-serif;
+  border-radius: 8px;
+  border: 1px solid #52e3a4;
+  background: transparent;
+  color: #52e3a4;
+  cursor: pointer;
+  margin-top: 4px;
+}
+.endless-btn:active {
+  transform: scale(0.98);
+  background: rgba(82, 227, 164, 0.08);
 }
 @keyframes confetti-fall {
   0% { transform: translateY(0) rotate(0deg); opacity: 1; }

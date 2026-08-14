@@ -20,14 +20,12 @@ export function useMazeGame() {
   const ENEMY_MOVE_ANIM_DURATION = 180
   let enemyMoveAnimStartTime = 0
   let shakeStartTime = -9999
-  //smart enemy chase//
   const CHASE_TRIGGER_DISTANCE = 4
   const CHASE_DURATION_MS = 3000
   const CHASE_REPATH_INTERVAL_MS = 600
   let chaseUntil = 0
   let lastChaseRepathAt = 0
 
-  // ---------- ADDED: pause/backgrounding time-freeze mechanism ----------
   const isPaused = ref(false)
   let totalPausedMs = 0
   let pauseStartedAt = 0
@@ -66,9 +64,8 @@ export function useMazeGame() {
     }
    
   }
-  // ---------- end pause mechanism ----------
 
-  const { getSettings, getProgress, saveLevelProgress, saveLastLevel } = useSaveData()
+  const { getSettings, getProgress, saveLevelProgress, saveLastLevel, getEndlessBest, saveEndlessBest } = useSaveData()
   const {
     soundEnabled,
     toggleSound,
@@ -81,6 +78,10 @@ export function useMazeGame() {
   const moveCount = ref(0)
   const levelstartTime = ref(0)
   const elapsedSeconds = ref(0)
+
+  const gameMode = ref('story')      
+  const endlessDepth = ref(0) 
+  const endlessGameOver = ref(null) 
 
   const CELL = 40
   const SPRITE_SIZE = 32
@@ -116,7 +117,6 @@ export function useMazeGame() {
     currentLevel.value ? currentLevel.value.maze.length * CELL : 320
   )
 
-  // ---------- Flood mechanic ----------
   const FLOOD_START_DELAY_MS = 2500
   const BASE_RISE_MS_PER_ROW = 2600
   const MIN_RISE_MS_PER_ROW = 1000
@@ -134,6 +134,10 @@ export function useMazeGame() {
 
   function triggerCaught(reason, timestamp) {
     if (timestamp < invulnerableUntil) return
+    if (gameMode.value === 'endless') {
+    endRun(reason)
+    return
+  }
     invulnerableUntil = timestamp + 900
     playCaughtSound()
     vibrate(120)
@@ -146,7 +150,20 @@ export function useMazeGame() {
     }, 1100)
   }
 
-  // ---------- Level lifecycle ----------
+  function endRun(reason) {
+  running = false
+  if (animFrameId) cancelAnimationFrame(animFrameId)
+  if (enemyIntervalId) clearInterval(enemyIntervalId)
+  playCaughtSound()
+  vibrate([120, 60, 120])
+  const best = saveEndlessBest(endlessDepth.value)
+  endlessGameOver.value = {
+    depth: endlessDepth.value + 1,
+    best: best + 1,
+    reason,
+  }
+}
+
   function loadLevel(index) {
     moveCount.value = 0
     levelstartTime.value = Date.now()
@@ -186,6 +203,56 @@ export function useMazeGame() {
       pauseGame()
     }
   }
+
+  function loadEndlessLevel(depth) {
+  moveCount.value = 0
+  levelstartTime.value = Date.now()
+
+  const { rooms, braidChance, floodBonus } = getEndlessParams(depth)
+  const rng = mulberry32(depth + 1)
+  const level = generateMaze(rooms, rooms, rng, braidChance)
+
+  currentLevel.value = level
+  currentTheme.value = getThemeForLevel(depth)
+  resetPositions(level)
+  levelStartTime = now()
+  invulnerableUntil = 0
+  floodPercent.value = 0
+  floodWarningPlayed = false
+
+  const shortestPath = findPath(level.maze, level.start, level.exit)
+  const pathMoves = Math.max(1, shortestPath.length - 1)
+  const dodgeBuffer = ENEMY_DODGE_BUFFER_MS * (1 + depth * 0.04)
+  const requiredSafeMs = pathMoves * MOVE_TIME_BUDGET_MS + dodgeBuffer
+  const minSafeRiseMsPerRow = (requiredSafeMs - FLOOD_START_DELAY_MS) / level.exit.row
+
+  const difficultyRiseMsPerRow = Math.max(MIN_RISE_MS_PER_ROW, BASE_RISE_MS_PER_ROW - depth * 25 - floodBonus)
+  currentRiseMsPerRow = Math.max(difficultyRiseMsPerRow, minSafeRiseMsPerRow)
+
+  requestAnimationFrame(() => {
+    canvasEl.value.width = canvasWidth.value
+    canvasEl.value.height = canvasHeight.value
+  })
+
+  startEnemyLoop()
+
+  const intro = getWorldIntroForLevel(depth)
+  if (intro) {
+    worldIntro.value = intro
+    pauseGame()
+  }
+}
+const ENDLESS_BASE_ROOMS = 4
+const ENDLESS_MAX_ROOMS = 15
+
+function getEndlessParams(depth) {
+  const rooms = Math.min(ENDLESS_BASE_ROOMS + depth, ENDLESS_MAX_ROOMS)
+  const overflow = Math.max(0, ENDLESS_BASE_ROOMS + depth - ENDLESS_MAX_ROOMS)
+  const braidChance = Math.max(0.05, 0.2 - overflow * 0.01) 
+  const enemySpeedBonus = overflow * 15  
+  const floodBonus = overflow * 40    
+  return { rooms, braidChance, enemySpeedBonus, floodBonus }
+}
   function dismissWorldIntro() {
   worldIntro.value = null
   if (isPaused.value) {
@@ -215,8 +282,14 @@ export function useMazeGame() {
 
   function startEnemyLoop() {
     if (enemyIntervalId) clearInterval(enemyIntervalId)
-    const speed = Math.max(320, 700 - currentLevelIndex.value * 40)
-    enemyIntervalId = setInterval(moveEnemy, speed)
+  let speed
+  if (gameMode.value === 'endless') {
+    const { enemySpeedBonus } = getEndlessParams(endlessDepth.value)
+    speed = Math.max(220, 700 - endlessDepth.value * 25 - enemySpeedBonus)
+  } else {
+    speed = Math.max(320, 700 - currentLevelIndex.value * 40)
+  }
+  enemyIntervalId = setInterval(moveEnemy, speed)
   }
 
   function moveEnemy() {
@@ -371,11 +444,17 @@ export function useMazeGame() {
       }
 
       if (player.value.row === level.exit.row && player.value.col === level.exit.col) {
-        const seconds = (Date.now() - levelstartTime.value) / 1000
-        const stars = calculateStars(moveCount.value, seconds, level.maze.length)
-        saveLevelProgress(currentLevelIndex.value, stars, moveCount.value, seconds)
-        playLevelCompleteSound()
-        vibrate([60, 40, 60])
+        if (gameMode.value === 'endless') {
+    endlessDepth.value++
+    playLevelCompleteSound()
+    vibrate([40, 30, 40])
+    loadEndlessLevel(endlessDepth.value)
+  } else {
+    const seconds = (Date.now() - levelstartTime.value) / 1000
+    const stars = calculateStars(moveCount.value, seconds, level.maze.length)
+    saveLevelProgress(currentLevelIndex.value, stars, moveCount.value, seconds)
+    playLevelCompleteSound()
+    vibrate([60, 40, 60])
 
         if (enemyIntervalId) clearInterval(enemyIntervalId)
         running = false
@@ -390,6 +469,7 @@ export function useMazeGame() {
       }
     }
   }
+}
 
   function calculateStars(moves, seconds, mazeSize) {
     const perMoves = mazeSize * 2
@@ -433,9 +513,9 @@ function handleKeydown(event) {
 
   const move = KEY_MOVE_MAP[event.key]
   if (!move) return
-  event.preventDefault() // stop OS key-repeat from double-firing alongside our own interval
+  event.preventDefault()
 
-  if (activeKeyMove === event.key) return // already repeating this direction, ignore OS auto-repeat keydowns
+  if (activeKeyMove === event.key) return
 
   activeKeyMove = event.key
   tryMove(move[0], move[1])
@@ -476,7 +556,6 @@ function getEnemyFrame(timestamp) {
     stopJoystick,
   } = useJoystick(tryMove, { radius: 50, deadZone: 6, repeatMs: 90 })
 
-  // ---------- Game loop ----------
   let running = false
   let animFrameId = null
 
@@ -489,6 +568,7 @@ function getEnemyFrame(timestamp) {
   }
 
   function startGame(startIndex = 0) {
+    gameMode.value = 'story' 
     currentLevelIndex.value = startIndex
     ctx = canvasEl.value.getContext('2d')
     loadImages(() => {
@@ -500,6 +580,28 @@ function getEnemyFrame(timestamp) {
       animFrameId = requestAnimationFrame(loop)
     })
   }
+  function startEndlessMode() {
+  gameMode.value = 'endless'
+  endlessDepth.value = 0
+  endlessGameOver.value = null
+  ctx = canvasEl.value.getContext('2d')
+  loadImages(() => {
+    loadEndlessLevel(endlessDepth.value)
+    window.addEventListener('keydown', handleKeydown)
+    window.addEventListener('keyup', handleKeyup)
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    running = true
+    animFrameId = requestAnimationFrame(loop)
+  })
+}
+
+function restartEndless() {
+  endlessDepth.value = 0
+  endlessGameOver.value = null
+  loadEndlessLevel(0)
+  running = true
+  animFrameId = requestAnimationFrame(loop)
+}
 
   function stopGame() {
     running = false
@@ -542,6 +644,11 @@ function getEnemyFrame(timestamp) {
     isPaused,       
     togglePause,
     worldIntro,
-    dismissWorldIntro    
+    dismissWorldIntro,
+    gameMode,
+    endlessDepth,
+    endlessGameOver,
+    startEndlessMode,
+    restartEndless,   
   }
 }

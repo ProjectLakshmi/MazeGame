@@ -2,11 +2,11 @@
 import { ref, computed,  onMounted, onUnmounted } from 'vue'
 import { useSaveData } from '@/composables/useSaveData'
 
-const emit = defineEmits(['start','settings', 'continue'])
+const emit = defineEmits(['start','settings', 'continue','endless'])
 
 const showHowToPlay = ref(false)
 const difficulty = ref('normal')
-const { getBestLevelReached, getLastLevel } = useSaveData()
+const { getBestLevelReached, getLastLevel, getBestEndlessDepth } = useSaveData()
 const bestLevel = ref(getBestLevelReached())
 const lastLevel = computed(()=> getLastLevel())
 
@@ -129,6 +129,10 @@ onUnmounted(() => {
       <span class="stat-label">Best level reached</span>
       <span class="stat-value">{{ String(bestLevel).padStart(2, '0') }}</span>
     </div>
+    <div class="stats-bar">                                                       <!-- ADD -->
+  <span class="stat-label">Best endless depth</span>
+  <span class="stat-value">{{ String(bestEndlessDepth).padStart(2, '0') }}</span>
+</div>
   </div>
 </template>
 

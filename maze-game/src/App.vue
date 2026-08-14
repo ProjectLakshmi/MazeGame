@@ -29,13 +29,31 @@ function handlePopState(event) {
   }
 }
 
+// function startLevel(index) {
+//   selectedLevel.value = index
+//   goTo('game')
+// }
+// function continueLevel(index){
+//   selectedLevel.value = index
+//   goTo('levelSelect')
+//   goTo('game')
+// }
+
+const gameMode = ref('story')  
+
 function startLevel(index) {
+  gameMode.value = 'story'    
   selectedLevel.value = index
   goTo('game')
 }
 function continueLevel(index){
+  gameMode.value = 'story'   
   selectedLevel.value = index
   goTo('levelSelect')
+  goTo('game')
+}
+function startEndless() {    
+  gameMode.value = 'endless'
   goTo('game')
 }
 onMounted(() => {
@@ -50,7 +68,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <HomeScreen v-if="currentScreen === 'home'" @start="goTo('levelSelect')" @settings="goTo('settings')" @continue="continueLevel"/>
+  <HomeScreen v-if="currentScreen === 'home'" @start="goTo('levelSelect')" @settings="goTo('settings')" @continue="continueLevel" @endless ="startEndless"/>
   <LevelScreen
     v-else-if="currentScreen === 'levelSelect'"
     @selectLevel="startLevel"
@@ -60,6 +78,7 @@ onUnmounted(() => {
   <GameScreen
     v-else
     :startLevel="selectedLevel"
+    :mode="gameMode"
     @backToLevelSelect="goBack"
   />
 </template>
