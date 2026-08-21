@@ -8,17 +8,15 @@ const emit = defineEmits(['backToLevelSelect'])
 const {
   canvasEl,
   currentLevelIndex,
-  joystickBase,
-  knobPosition,
+  handleTouchStart,
+  handleTouchMove,
+  handleTouchEnd,
   levelCompleteInfo,
   continueToNextLevel,
   soundEnabled,
   toggleSound,
   startGame,
   stopGame,
-  handleJoystickStart,
-  handleJoystickMove,
-  handleJoystickEnd,
   isPaused,
   togglePause,
   worldIntro,
@@ -32,10 +30,6 @@ const {
 
 const confettiPieces = ref([])
 const colors = ['#2df5c9', '#7b2ff7', '#0dd3c4', '#ff5f3a', '#7ffcec']
-
-const isJoystickActive = computed(()=>{
-  return Math.abs(knobPosition.value.x)>2 || Math.abs(knobPosition.value.y)>2
-})
 
 function burstConfetti() {
   confettiPieces.value = Array.from({ length: 24 }, (_, i) => ({
@@ -71,7 +65,12 @@ onUnmounted(stopGame)
 <h2 v-if="gameMode === 'story'">Level {{ currentLevelIndex + 1 }}</h2>
 <h2 v-else>Depth {{ endlessDepth + 1 }}</h2>
 
-  <div class="canvas-wrap">
+  <div
+    class="canvas-wrap"
+    @touchstart.prevent="handleTouchStart"
+    @touchmove.prevent="handleTouchMove"
+    @touchend.prevent="handleTouchEnd"
+  >
     <canvas ref="canvasEl"></canvas>
 
     <div class="confetti-layer">
@@ -90,24 +89,6 @@ onUnmounted(stopGame)
     </div>
   </div>
 
-  <div
-  class="joystick-base"
-  :class="{ active: isJoystickActive }"
-  ref="joystickBase"
-  @touchstart.prevent="handleJoystickStart"
-  @touchmove.prevent="handleJoystickMove"
-  @touchend.prevent="handleJoystickEnd"
-  @mousedown="handleJoystickStart"
-  @mousemove="handleJoystickMove"
-  @mouseup="handleJoystickEnd"
-  @mouseleave="handleJoystickEnd"
->
-  <div
-    class="joystick-knob"
-    :class="{ active: isJoystickActive }"
-    :style="{ transform: `translate(${knobPosition.x}px, ${knobPosition.y}px)` }"
-  ></div>
-</div>
 <div v-if="worldIntro" class="modal-backdrop world-intro-backdrop">
     <div class="modal world-intro-modal">
       <p class="world-eyebrow">New World</p>
@@ -170,44 +151,13 @@ onUnmounted(stopGame)
   font-size: 14px;
   cursor: pointer;
 }
-.canvas-wrap { position: relative; display: flex; justify-content: center; }
-.canvas-wrap canvas { border: 2px solid black; max-width: 100%; height: auto; }
-.joystick-base {
-  width: 130px;
-  height: 130px;
-  border-radius: 50%;
-  background: radial-gradient(circle at 40% 35%, #232b36, #171d26 70%);
-  border: 2px solid rgba(82, 227, 164, 0.15);
-  box-shadow:
-    inset 0 2px 6px rgba(0, 0, 0, 0.5),
-    0 0 0 rgba(82, 227, 164, 0);
-  margin: 24px auto;
+.canvas-wrap {
   position: relative;
+  display: flex;
+  justify-content: center;
   touch-action: none;
-  transition: box-shadow 0.2s ease, border-color 0.2s ease;
 }
-.joystick-base.active {
-  border-color: rgba(82, 227, 164, 0.5);
-  box-shadow:
-    inset 0 2px 6px rgba(0, 0, 0, 0.5),
-    0 0 18px rgba(82, 227, 164, 0.35);
-}
-.joystick-knob {
-  width: 54px;
-  height: 54px;
-  border-radius: 50%;
-  background: radial-gradient(circle at 35% 30%, #3a4657, #1c232d 75%);
-  border: 1px solid rgba(82, 227, 164, 0.2);
-  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.4);
-  position: absolute;
-  top: 38px;
-  left: 38px;
-  transition: transform 0.05s linear, box-shadow 0.2s ease, background 0.2s ease;
-}
-.joystick-knob.active {
-  background: radial-gradient(circle at 35% 30%, #52e3a4, #2fa87c 75%);
-  box-shadow: 0 0 14px rgba(82, 227, 164, 0.6), 0 3px 8px rgba(0, 0, 0, 0.4);
-}
+.canvas-wrap canvas { border: 2px solid black; max-width: 100%; height: auto; }
 .modal-backdrop {
   position: fixed; inset: 0; background: rgba(0,0,0,0.6);
   display: flex; align-items: center; justify-content: center; z-index: 10;

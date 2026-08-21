@@ -3,7 +3,7 @@ import playerSprite from '@/asset/playerSheet.png'
 import enemySprite from '@/asset/enemySheet.png'
 import { useSaveData } from '@/composables/useSaveData.js'
 import { useSound } from '@/composables/useSound.js'
-import { useJoystick } from '@/composables/useJoystick.js'
+import { useSwipeMove } from '@/composables/useSwipeMove.js'
 import { mulberry32, generateMaze, findPath, pickEnemyPatrol } from '@/utils/mazeGenerator.js'
 import { getThemeForLevel, getWorldIntroForLevel } from '@/utils/worldThemes.js'
 import { drawTiles, drawWallEdges, drawExit, drawFlood, drawSprite, getSquashStretch, drawAmbientParticles, drawWallTexture, drawThemeBackground, WALK_FRAMES  } from '@/utils/mazeRenderer.js'
@@ -548,13 +548,11 @@ function getEnemyFrame(timestamp) {
 }
 
   const {
-    joystickBase,
-    knobPosition,
-    handleJoystickStart,
-    handleJoystickMove,
-    handleJoystickEnd,
-    stopJoystick,
-  } = useJoystick(tryMove, { radius: 50, deadZone: 6, repeatMs: 90 })
+    handleTouchStart,
+    handleTouchMove,
+    handleTouchEnd,
+    stopSwipe,
+  } = useSwipeMove(tryMove, { stepThreshold: 24, holdRepeatMs: 90 })
 
   let running = false
   let animFrameId = null
@@ -607,7 +605,7 @@ function restartEndless() {
     running = false
     if (animFrameId) cancelAnimationFrame(animFrameId)
     if (enemyIntervalId) clearInterval(enemyIntervalId)
-    stopJoystick()
+    stopSwipe()
     window.removeEventListener('keydown', handleKeydown)
     window.removeEventListener('keyup', handleKeyup)
     document.removeEventListener('visibilitychange', handleVisibilityChange) 
@@ -625,15 +623,13 @@ function restartEndless() {
     floodPercent,
     caughtMessage,
     levelCompleteInfo,
-    joystickBase,
-    knobPosition,
     tryMove,
     startGame,
     stopGame,
     continueToNextLevel,
-    handleJoystickStart,
-    handleJoystickMove,
-    handleJoystickEnd,
+    handleTouchStart,
+    handleTouchMove,
+    handleTouchEnd,
     getLevelResults: getProgress,
     isLevelUnlocked,
     TOTAL_LEVELS,
