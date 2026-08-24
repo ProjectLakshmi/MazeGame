@@ -3,7 +3,7 @@ import { computed } from 'vue'
 import { useMazeGame } from '@/composables/useMazeGame'
 import { useSaveData } from '@/composables/useSaveData'
 
-const emit = defineEmits(['selectLevel', 'back'])
+const emit = defineEmits(['selectLevel', 'back', 'buildMaze'])
 
 const { TOTAL_LEVELS, isLevelUnlocked } = useMazeGame()
 const { getProgress } = useSaveData()
@@ -65,6 +65,10 @@ const nextLevelIndex = computed(() => {
         </template>
       </button>
     </div>
+
+    <button class="build-maze-btn" @click="$emit('buildMaze')">
+      <span class="build-icon">✏️</span> Build a Maze
+    </button>
   </div>
 </template>
 
@@ -196,5 +200,33 @@ h1 {
 .lock-icon {
   font-size: 20px;
   opacity: 0.7;
+}
+
+/* ADDED — Build a Maze entry point */
+.build-maze-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 32px auto 0;
+  padding: 12px 22px;
+  border-radius: 10px;
+  border: 1px dashed rgba(82, 227, 164, 0.5);
+  background: rgba(82, 227, 164, 0.06);
+  color: #52e3a4;
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.12s ease, background 0.2s ease, border-color 0.2s ease;
+}
+.build-maze-btn:hover {
+  background: rgba(82, 227, 164, 0.12);
+  border-color: #52e3a4;
+}
+.build-maze-btn:active {
+  transform: scale(0.97);
+}
+.build-icon {
+  font-size: 15px;
 }
 </style>

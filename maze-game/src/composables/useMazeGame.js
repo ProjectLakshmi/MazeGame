@@ -449,6 +449,25 @@ function getEndlessParams(depth) {
     playLevelCompleteSound()
     vibrate([40, 30, 40])
     loadEndlessLevel(endlessDepth.value)
+  } else if (gameMode.value === 'custom') {
+    const seconds = (Date.now() - levelstartTime.value) / 1000
+    const stars = calculateStars(moveCount.value, seconds, level.maze.length)
+    playLevelCompleteSound()
+    vibrate([60, 40, 60])
+
+    if (enemyIntervalId) clearInterval(enemyIntervalId)
+    running = false
+    if (animFrameId) cancelAnimationFrame(animFrameId)
+
+    // Custom levels aren't part of story progress, so nothing gets saved —
+    // this just shows the completion modal for feedback
+    levelCompleteInfo.value = {
+      levelIndex: null,
+      custom: true,
+      stars,
+      moves: moveCount.value,
+      seconds,
+    }
   } else {
     const seconds = (Date.now() - levelstartTime.value) / 1000
     const stars = calculateStars(moveCount.value, seconds, level.maze.length)
@@ -601,6 +620,50 @@ function restartEndless() {
   animFrameId = requestAnimationFrame(loop)
 }
 
+function loadCustomLevel(level) {
+  moveCount.value = 0
+  levelstartTime.value = Date.now()
+
+  currentLevel.value = level
+  currentTheme.value = getThemeForLevel(0)
+  resetPositions(level)
+  levelStartTime = now()
+  invulnerableUntil = 0
+  floodPercent.value = 0
+  floodWarningPlayed = false
+
+  // Use the same safety-margin logic as story levels so a custom maze
+  // still gives the player a fair amount of time before the flood arrives
+  const shortestPath = findPath(level.maze, level.start, level.exit)
+  const pathMoves = Math.max(1, shortestPath.length - 1)
+  const dodgeBuffer = ENEMY_DODGE_BUFFER_MS
+  const requiredSafeMs = pathMoves * MOVE_TIME_BUDGET_MS + dodgeBuffer
+  const minSafeRiseMsPerRow = (requiredSafeMs - FLOOD_START_DELAY_MS) / Math.max(1, level.exit.row)
+  currentRiseMsPerRow = Math.max(BASE_RISE_MS_PER_ROW, minSafeRiseMsPerRow)
+
+  requestAnimationFrame(() => {
+    canvasEl.value.width = canvasWidth.value
+    canvasEl.value.height = canvasHeight.value
+  })
+
+  startEnemyLoop()
+}
+
+function startCustomLevel(level) {
+  gameMode.value = 'custom'
+  endlessGameOver.value = null
+  levelCompleteInfo.value = null
+  ctx = canvasEl.value.getContext('2d')
+  loadImages(() => {
+    loadCustomLevel(level)
+    window.addEventListener('keydown', handleKeydown)
+    window.addEventListener('keyup', handleKeyup)
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    running = true
+    animFrameId = requestAnimationFrame(loop)
+  })
+}
+
   function stopGame() {
     running = false
     if (animFrameId) cancelAnimationFrame(animFrameId)
@@ -645,6 +708,7 @@ function restartEndless() {
     endlessDepth,
     endlessGameOver,
     startEndlessMode,
-    restartEndless,   
+    restartEndless,
+    startCustomLevel,
   }
 }

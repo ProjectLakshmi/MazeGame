@@ -2,7 +2,11 @@
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useMazeGame } from '@/composables/useMazeGame'
 
-const props = defineProps({ startLevel: { type: Number, default: 0 },mode :{type:String, default: 'story'} })
+const props = defineProps({
+  startLevel: { type: Number, default: 0 },
+  mode: { type: String, default: 'story' },
+  customLevel: { type: Object, default: null },
+})
 const emit = defineEmits(['backToLevelSelect'])
 
 const {
@@ -26,6 +30,7 @@ const {
   endlessGameOver,
   startEndlessMode,
   restartEndless,
+  startCustomLevel,
 } = useMazeGame()
 
 const confettiPieces = ref([])
@@ -49,6 +54,7 @@ watch(levelCompleteInfo, (newVal) => {
 
 onMounted(() => {
   if (props.mode === 'endless') startEndlessMode()
+  else if (props.mode === 'custom' && props.customLevel) startCustomLevel(props.customLevel)
   else startGame(props.startLevel)
 })
 onUnmounted(stopGame)
@@ -127,8 +133,8 @@ onUnmounted(stopGame)
       </p>
       <p class="stats">{{ levelCompleteInfo.moves }} moves · {{ levelCompleteInfo.seconds.toFixed(1) }}s</p>
       <div class="modal-actions">
-        <button class="secondary" @click="emit('backToLevelSelect')">Level Select</button>
-        <button class="primary" @click="continueToNextLevel">Next Level →</button>
+        <button class="secondary" @click="emit('backToLevelSelect')">{{ levelCompleteInfo.custom ? 'Back to Editor' : 'Level Select' }}</button>
+        <button v-if="!levelCompleteInfo.custom" class="primary" @click="continueToNextLevel">Next Level →</button>
       </div>
     </div>
   </div>
