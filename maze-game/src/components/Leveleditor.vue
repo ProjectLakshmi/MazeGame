@@ -56,6 +56,15 @@ function stopPainting() {
   isPainting.value = false
 }
 
+function onGridTouchMove(event) {
+  if (!isPainting.value) return
+  const touch = event.touches[0]
+  const el = document.elementFromPoint(touch.clientX, touch.clientY)
+  if (el && el.dataset && el.dataset.row !== undefined) {
+    paintCell(Number(el.dataset.row), Number(el.dataset.col))
+  }
+}
+
 function handleRegenerate() {
   randomizeFromGenerator()
 }
@@ -91,7 +100,7 @@ function playTest() {
 </script>
 
 <template>
-  <div class="editor-wrap" @mouseup="stopPainting" @mouseleave="stopPainting">
+  <div class="editor-wrap" @mouseup="stopPainting" @mouseleave="stopPainting" @touchend="stopPainting">
     <div class="header-row">
       <button class="back-btn" @click="emit('backToLevelSelect')">← Levels</button>
       <h2 class="title">Build a Maze</h2>
@@ -109,6 +118,8 @@ function playTest() {
       </label>
     </div>
 
+    <p class="hint">Pick a tool, then tap or drag on the grid to paint it.</p>
+
     <div class="toolbar">
       <button :class="{ active: tool === 'wall' }" @click="tool = 'wall'">🧱 Wall</button>
       <button :class="{ active: tool === 'floor' }" @click="tool = 'floor'">⬜ Floor</button>
@@ -121,6 +132,7 @@ function playTest() {
     <div
       class="grid"
       :style="{ gridTemplateColumns: `repeat(${width}, ${CELL_PX}px)` }"
+      @touchmove.prevent="onGridTouchMove"
     >
       <div
         v-for="(row, r) in grid"
@@ -133,6 +145,8 @@ function playTest() {
           class="cell"
           :class="cellClass(r, c)"
           :style="{ width: CELL_PX + 'px', height: CELL_PX + 'px' }"
+          :data-row="r"
+          :data-col="c"
           @mousedown="onCellDown(r, c)"
           @mouseenter="onCellEnter(r, c)"
           @touchstart.prevent="onCellDown(r, c)"
@@ -200,6 +214,13 @@ function playTest() {
 }
 .size-row label { display: flex; flex-direction: column; gap: 4px; }
 
+.hint {
+  font-size: 12px;
+  color: #8a97a8;
+  margin: 0 0 10px;
+  font-family: 'JetBrains Mono', monospace;
+}
+
 .toolbar {
   display: flex;
   flex-wrap: wrap;
@@ -245,8 +266,10 @@ function playTest() {
   border-radius: 3px;
   cursor: pointer;
 }
-.cell.wall { background: #232b36; }
-.cell.floor { background: #101720; }
+.cell.wall { background: #0a0d12; border: 1px solid #060809; }
+.cell.floor { background: #4a5b6e; border: 1px solid #5d7288; }
+.cell.floor:hover { background: #5d7288; }
+.cell.wall:hover { background: #151b24; }
 .cell.is-start { background: #2fa87c; color: #0d1710; }
 .cell.is-exit { background: #52e3a4; color: #0d1710; box-shadow: 0 0 8px rgba(82, 227, 164, 0.6); }
 
