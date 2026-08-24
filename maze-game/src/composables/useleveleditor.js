@@ -1,6 +1,6 @@
 import { ref, computed } from 'vue'
 import { generateMaze, mulberry32, findPath } from '@/utils/mazeGenerator.js'
-import { encodeLevel, decodeLevel } from '@/utils/mazeCodec.js'
+import { encodeLevel, decodeLevel } from '@/utils/Mazecodec.js'
 
 export function useLevelEditor() {
   const roomsWide = ref(6)
