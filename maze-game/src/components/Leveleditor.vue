@@ -1,6 +1,6 @@
 <script setup>
 import { ref, computed } from 'vue'
-import { useLevelEditor } from '@/composables/useLevelEditor'
+import { useLevelEditor } from '@/composables/useleveleditor'
 
 const emit = defineEmits(['backToLevelSelect', 'playCustomLevel'])
 
