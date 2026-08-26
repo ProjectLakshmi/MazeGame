@@ -9,10 +9,7 @@ import RaceLobbyScreen from './components/Racelobbyscreen.vue'
 import RaceGameScreen from './components/RaceGameScreen.vue'
 import { useMultiplayerRace } from '@/composables/usemultiplayerrace'
 
-// One shared connection for the whole race flow — the lobby and the race
-// game screen must use the SAME SignalR connection, since room membership
-// on the server is tied to a specific connectionId. Creating a second
-// instance of this composable would open a second, unrelated connection.
+
 const race = useMultiplayerRace()
 provide('race', race)
 

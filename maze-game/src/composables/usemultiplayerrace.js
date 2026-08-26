@@ -2,7 +2,7 @@ import { ref } from 'vue'
 import * as signalR from '@microsoft/signalr'
 
 
-const HUB_URL = 'http://localhost:5000/racehub'
+const HUB_URL = import.meta.env.VITE_APP_SIGNALR_HUBURL
 
 export function useMultiplayerRace() {
   const connection = ref(null)
