@@ -13,6 +13,9 @@ WORKDIR /app
 
 COPY --from=build /app/publish .
 
+# Disable Linux inotify file watcher and use polling instead
+ENV DOTNET_USE_POLLING_FILE_WATCHER=1
+
 # Render uses port 10000
 ENV ASPNETCORE_HTTP_PORTS=10000
 
