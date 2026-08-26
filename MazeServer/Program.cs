@@ -33,6 +33,7 @@ builder.Services.AddCors(options =>
 var app = builder.Build();
 
 app.UseCors("VueClient");
+app.UseCors("AllowFrontend");
 app.MapHub<RaceHub>("/racehub");
 app.MapGet("/", () => "Maze Race server is running.");
 
