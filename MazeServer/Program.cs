@@ -22,7 +22,7 @@ builder.Services.AddCors(options =>
             .WithOrigins(
                 "http://localhost:5173",
                 "http://localhost:3000",
-                "https://maze-game-khaki-five.vercel.app/" // TODO: replace with your real Vercel URL
+                "https://maze-game-khaki-five.vercel.app" // TODO: replace with your real Vercel URL
             )
             .AllowAnyHeader()
             .AllowAnyMethod()
