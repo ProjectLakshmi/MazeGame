@@ -3,6 +3,9 @@ import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import { VitePWA } from 'vite-plugin-pwa'
 
+console.log('ALL ENV KEYS:', Object.keys(process.env).filter(k => k.startsWith('VITE_')))
+console.log('NODE_ENV:', process.env.NODE_ENV)
+console.log('VERCEL:', process.env.VERCEL, process.env.VERCEL_ENV)
 export default defineConfig({
   
   plugins: [
