@@ -1,14 +1,25 @@
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, provide, onMounted, onUnmounted } from 'vue'
 import HomeScreen from '@/components/HomeScreen.vue'
 import LevelScreen from '@/components/LevelScreen.vue'
 import GameScreen from '@/components/GameScreen.vue'
 import SettingsScreen from './components/SettingsScreen.vue'
 import LevelEditor from './components/Leveleditor.vue'
+import RaceLobbyScreen from './components/Racelobbyscreen.vue'
+import RaceGameScreen from './components/RaceGameScreen.vue'
+import { useMultiplayerRace } from '@/composables/usemultiplayerrace'
+
+// One shared connection for the whole race flow — the lobby and the race
+// game screen must use the SAME SignalR connection, since room membership
+// on the server is tied to a specific connectionId. Creating a second
+// instance of this composable would open a second, unrelated connection.
+const race = useMultiplayerRace()
+provide('race', race)
 
 const screenStack = ref(['home'])
 const selectedLevel = ref(0)
 const customLevel = ref(null)
+const raceInfo = ref(null)
 
 const currentScreen = computed(() => screenStack.value[screenStack.value.length - 1])
 
@@ -55,6 +66,19 @@ function playCustomLevel(level) {
   gameMode.value = 'custom'
   goTo('game')
 }
+function openRaceLobby() {
+  goTo('raceLobby')
+}
+function handleRaceStarting(info) {
+  raceInfo.value = info
+  goTo('raceGame')
+}
+function handleRaceExit() {
+  // Pops back to home rather than the lobby, since the room is over once
+  // a race finishes (or someone leaves mid-race)
+  screenStack.value = ['home']
+  history.replaceState({ screenIndex: 0 }, '')
+}
 
 onMounted(() => {
   history.replaceState({ screenIndex: 0 }, '')
@@ -73,6 +97,7 @@ onUnmounted(() => {
     @settings="goTo('settings')"
     @continue="continueLevel"
     @endless="startEndless"
+    @race="openRaceLobby"
   />
   <LevelScreen
     v-else-if="currentScreen === 'levelSelect'"
@@ -85,6 +110,16 @@ onUnmounted(() => {
     v-else-if="currentScreen === 'editor'"
     @backToLevelSelect="goBack"
     @playCustomLevel="playCustomLevel"
+  />
+  <RaceLobbyScreen
+    v-else-if="currentScreen === 'raceLobby'"
+    @back="goBack"
+    @raceStarting="handleRaceStarting"
+  />
+  <RaceGameScreen
+    v-else-if="currentScreen === 'raceGame'"
+    :raceInfo="raceInfo"
+    @exit="handleRaceExit"
   />
   <GameScreen
     v-else-if="currentScreen === 'game'"

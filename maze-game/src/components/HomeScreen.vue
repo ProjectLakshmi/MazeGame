@@ -2,7 +2,7 @@
 import { ref, computed,  onMounted, onUnmounted } from 'vue'
 import { useSaveData } from '@/composables/useSaveData'
 
-const emit = defineEmits(['start','settings', 'continue','endless'])
+const emit = defineEmits(['start','settings', 'continue','endless', 'race'])
 
 const showHowToPlay = ref(false)
 const difficulty = ref('normal')
@@ -120,6 +120,7 @@ onUnmounted(() => {
     <button class="start-btn" @click="handleStart">Start Game</button>
     <button class="endless-btn" @click="handleEndless">Endless Mode</button>
     <button class="settings-btn" @click="$emit('settings')">⚙ Settings</button>
+    <button @click ="$emit('race')">Race Mode</button>
     <button class="howto-toggle" @click="showHowToPlay = !showHowToPlay">
       {{ showHowToPlay ? 'Hide instructions' : 'How to play' }}
     </button>
