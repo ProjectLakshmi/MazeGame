@@ -3,6 +3,7 @@ import * as signalR from '@microsoft/signalr'
 
 
 const HUB_URL = import.meta.env.VITE_APP_SIGNALR_HUBURL
+console.log(import.meta.env.VITE_APP_SIGNALR_HUBURL)
 
 export function useMultiplayerRace() {
   const connection = ref(null)
