@@ -55,6 +55,7 @@ export function useMultiplayerRace() {
     })
 
     conn.on('RaceOver', (data) => {
+       console.log('RaceOver payload:', JSON.stringify(data))
       rankings.value = data.rankings
       raceState.value = 'finished'
     })

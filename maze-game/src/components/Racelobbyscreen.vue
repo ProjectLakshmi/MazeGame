@@ -65,8 +65,6 @@ function handleBack() {
   emit('back')
 }
 
-// Once the server signals RaceStarting, hand off to the race game screen
-// with everything it needs to build the same maze and report progress
 watch(raceState, (state) => {
   if (state === 'countdown') {
     emit('raceStarting', {
@@ -80,8 +78,6 @@ watch(raceState, (state) => {
 })
 
 onUnmounted(() => {
-  // Don't disconnect if we're navigating INTO the race — the game screen
-  // needs this same connection to keep reporting progress
   if (raceState.value !== 'countdown' && raceState.value !== 'racing') disconnect()
 })
 </script>
