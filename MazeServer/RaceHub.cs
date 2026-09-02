@@ -1,4 +1,5 @@
 ﻿using MazeServer;
+using MazeServer.Messaging.Abstractions;
 using Microsoft.AspNetCore.SignalR;
 using System.Text.RegularExpressions;
 
@@ -7,15 +8,19 @@ namespace MazeServer;
 public class RaceHub : Hub
 {
     private readonly RoomManager _rooms;
+    private readonly IMessagePublisher _publisher;
 
-    public RaceHub(RoomManager rooms)
+    public RaceHub(RoomManager rooms, IMessagePublisher publisher)
     {
         _rooms = rooms;
+        _publisher = publisher;
     }
 
     public async Task<string> CreateRoom(string playerName)
     {
         var room = _rooms.CreateRoom(Context.ConnectionId, SanitizeName(playerName));
+        Console.WriteLine($"[CreateRoom] code={room.Code}, host={Context.ConnectionId}, name={playerName}");
+        await Groups.AddToGroupAsync(Context.ConnectionId, room.Code);
         await Groups.AddToGroupAsync(Context.ConnectionId, room.Code);
         await Clients.Group(room.Code).SendAsync("RoomUpdated", RoomManager.ToDto(room));
         return room.Code;
@@ -23,12 +28,14 @@ public class RaceHub : Hub
 
     public async Task JoinRoom(string code, string playerName)
     {
+        Console.WriteLine($"[JoinRoom] attempt code={code}, connId={Context.ConnectionId}, name={playerName}");
         if (!_rooms.TryAddPlayer(code, Context.ConnectionId, SanitizeName(playerName), out var room) || room is null)
         {
+            Console.WriteLine($"[JoinRoom] FAILED for code={code}");
             await Clients.Caller.SendAsync("JoinError", "That room code doesn't exist or the race already started.");
             return;
         }
-
+        Console.WriteLine($"[JoinRoom] SUCCESS room={room.Code}, players now={room.Players.Count}: {string.Join(",", room.Players.Values.Select(p => p.Name))}");
         await Groups.AddToGroupAsync(Context.ConnectionId, room.Code);
         await Clients.Group(room.Code).SendAsync("RoomUpdated", RoomManager.ToDto(room));
     }
@@ -103,15 +110,19 @@ public class RaceHub : Hub
                 .OrderBy(p => p.FinishTimeMs)
                 .Select(RoomManager.ToPlayerDto)
                 .ToList();
+            var raceOverDto = new RaceOverDto(rankings);
             await Clients.Group(room.Code).SendAsync("RaceOver", new RaceOverDto(rankings));
+            _publisher.Publish(raceOverDto, routingKey: "race.completed");
         }
     }
 
     public override async Task OnDisconnectedAsync(Exception? exception)
     {
+        Console.WriteLine($"[Disconnect] connId={Context.ConnectionId}, exception={exception?.Message}");
         var (room, becameEmpty) = _rooms.RemovePlayer(Context.ConnectionId);
         if (room is not null && !becameEmpty)
         {
+            Console.WriteLine($"[Disconnect] removed from room={room.Code}, becameEmpty={becameEmpty}, remaining={room.Players.Count}");
             await Clients.Group(room.Code).SendAsync("RoomUpdated", RoomManager.ToDto(room));
         }
         await base.OnDisconnectedAsync(exception);

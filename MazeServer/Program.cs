@@ -1,19 +1,25 @@
 ﻿
 using MazeServer;
+using MazeServer.Messaging;
+using MazeServer.Messaging.Abstractions;
+using MazeServer.Messaging.Consumers;
+using MazeServer.Messaging.Implementations;
+using MazeServer.Messaging.Workers;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Cloud platforms like Railway/Render assign a port via the PORT env var
-// and expect the app to listen on it. Locally, PORT won't be set, so we
-// fall back to 5000 for `dotnet run` on your own machine.
 var port = Environment.GetEnvironmentVariable("PORT") ?? "5000";
 builder.WebHost.UseUrls($"http://0.0.0.0:{port}");
 
 builder.Services.AddSignalR();
 builder.Services.AddSingleton<RoomManager>();
+builder.Services.Configure<RabbitMqOptions>(builder.Configuration.GetSection("RabbitMq"));
 
-// Allowed origins: your local Vue dev server AND your deployed Vercel
-// frontend. Update the Vercel URL below once you know it.
+builder.Services.AddSingleton<IMessagePublisher, RabbitMqMessagePublisher>();
+builder.Services.AddSingleton<IMessageConsumer, RabbitMqMessageConsumer>();
+builder.Services.AddSingleton<RaceOverConsumer>();
+builder.Services.AddHostedService<RabbitMqConsumerWorker>();
+
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("VueClient", policy =>
@@ -22,11 +28,11 @@ builder.Services.AddCors(options =>
             .WithOrigins(
                 "http://localhost:5173",
                 "http://localhost:3000",
-                "https://maze-game-khaki-five.vercel.app" // TODO: replace with your real Vercel URL
+                "https://maze-game-khaki-five.vercel.app" 
             )
             .AllowAnyHeader()
             .AllowAnyMethod()
-            .AllowCredentials(); // required for SignalR's negotiate handshake
+            .AllowCredentials();
     });
 });
 
