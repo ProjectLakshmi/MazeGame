@@ -27,21 +27,38 @@ function getSettings(){
 function saveSettings(settings){
     localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings))
 }
-function getProgress(){
-    try{
-        const raw = localStorage.getItem(PROGRESS_KEY)
-        return raw ? JSON.parse(raw) : {}
-    }catch{
-        return {}
-    }
+const SECRET = 'maze-game-v1' 
+
+function sign(data) {
+  const str = JSON.stringify(data) + SECRET
+  let hash = 0
+  for (let i = 0; i < str.length; i++) {
+    hash = (hash << 5) - hash + str.charCodeAt(i)
+    hash |= 0
+  }
+  return hash.toString(36)
 }
-function saveLevelProgress(levelIndex, stars, moves, seconds){
-    const progress = getProgress()
-    const existing = progress[levelIndex]
-    if(!existing || stars > existing.stars){
-        progress[levelIndex] = {stars, moves, seconds}
-        localStorage.setItem(PROGRESS_KEY, JSON.stringify(progress))
-    }
+
+function saveLevelProgress(levelIndex, stars, moves, seconds) {
+  const progress = getProgress()
+  const existing = progress[levelIndex]
+  if (!existing || stars > existing.stars) {
+    progress[levelIndex] = { stars, moves, seconds }
+    const payload = { data: progress, sig: sign(progress) }
+    localStorage.setItem(PROGRESS_KEY, JSON.stringify(payload))
+  }
+}
+
+function getProgress() {
+  try {
+    const raw = localStorage.getItem(PROGRESS_KEY)
+    if (!raw) return {}
+    const { data, sig } = JSON.parse(raw)
+    if (sign(data) !== sig) return {} 
+    return data
+  } catch {
+    return {}
+  }
 }
 function getBestLevelReached(){
     const progress = getProgress()
