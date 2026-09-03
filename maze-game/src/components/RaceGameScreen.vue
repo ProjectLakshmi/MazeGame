@@ -28,6 +28,19 @@ const myFinishSeconds = computed(() => (myFinishTime.value != null ? (myFinishTi
 const rankedResults = computed(() => race.rankings.value)
 const waitingOnOthers = computed(() => phase.value === 'finished' && race.raceState.value !== 'finished')
 
+
+const myResult = computed(() => {
+  if (phase.value !== 'finished') return null
+  const me = race.players.value.find(p => p.connectionId === race.myConnectionId.value)
+  if (!me?.finished) return null
+
+  const finishedPlayers = race.players.value.filter(p => p.finished)
+  const isFirst = finishedPlayers.every(p => 
+    p.connectionId === me.connectionId || p.finishTimeMs >= me.finishTimeMs
+  )
+  return isFirst ? 'winning' : 'behind'
+})
+
 function handleExit() {
   stopRaceGame()
   race.disconnect()
@@ -75,9 +88,11 @@ watch(() => race.connectionState.value, (state) => {
         <h2>{{ waitingOnOthers ? 'You Finished!' : 'Race Over!' }}</h2>
         <p v-if="myFinishSeconds" class="stats">Your time: {{ myFinishSeconds }}s</p>
 
-        <div v-if="waitingOnOthers" class="waiting">
-          <p class="hint">Waiting for other racers to finish...</p>
-        </div>
+       <div v-if="waitingOnOthers" class="waiting">
+      <p>{{ myResult === 'winning' ? "You're in the lead! 🏆" : "You Finished!" }}</p>
+      <p class="hint">Waiting for other racers to finish...</p>
+      
+    </div>
 
         <ol v-else class="rankings">
           <li v-for="(p, i) in rankedResults" :key="p.connectionId" class="rank-row">
@@ -87,7 +102,7 @@ watch(() => race.connectionState.value, (state) => {
           </li>
         </ol>
 
-        <button class="primary" @click="handleExit">Back to Home</button>
+         <button v-if="!waitingOnOthers" class="primary" @click="handleExit">Back to Home</button>
       </div>
     </div>
   </div>
