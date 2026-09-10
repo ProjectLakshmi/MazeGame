@@ -104,7 +104,7 @@ onUnmounted(() => {
     @back="goBack"
     @buildMaze="openEditor"
   />
-  <LeaderboardScreen v-if="currentView === 'leaderboard'" @back="goBack" />
+  <LeaderboardScreen v-else-if="currentScreen === 'leaderboard'" @back="goBack" />
   <SettingsScreen v-else-if="currentScreen === 'settings'" @back="goBack" />
   <LevelEditor
     v-else-if="currentScreen === 'editor'"

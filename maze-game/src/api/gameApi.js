@@ -1,7 +1,7 @@
 const API_BASE = import.meta.env.VITE_APP_API_BASEURL;
 
 function getOrCreatePlayerId(){
-    let id = localStorage.getItem('mazePLayerId');
+    let id = localStorage.getItem('mazePlayerId');
     if(!id){
         id = crypto.randomUUID();
         localStorage.setItem('mazePlayerId', id)
@@ -10,12 +10,13 @@ function getOrCreatePlayerId(){
 }
 
 async function request(path, options = {}){
-    const res = await fetch(`${API_BASE}${path}`,{
+    const base = API_BASE.replace(/\/+$/, '');
+    const res = await fetch(`${base}${path}`,{
         headers: {'Content-Type': 'application/json'},
         ...options
     })
     if(!res.ok) throw new Error(`Request failed with status ${res.status}`);
-    return res.json;
+    return res.json();
 }
 
 export async function fetchProgress(){
@@ -27,7 +28,7 @@ export async function submitLevelResult(levelIndex,stars,moves,seconds){
     const playerId = getOrCreatePlayerId();
     return request(`/api/progress/${playerId}`,{
     method: 'POST',
-    body: JSON.stringfy({levelIndex,stars, moves, seconds})
+    body: JSON.stringify({levelIndex,stars, moves, seconds})
     }
     )
 }
@@ -36,7 +37,7 @@ export async function submitEndlessDepth(depth){
     const playerId = getOrCreatePlayerId();
     return request(`/api/progress/${playerId}/endless`,{
     method: 'POST',
-    body: JSON.stringfy({depth})
+    body: JSON.stringfiy({depth})
     }
     )
 }
