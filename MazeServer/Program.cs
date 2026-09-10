@@ -1,5 +1,10 @@
 ﻿
 using MazeServer;
+using MazeServer.Data;
+using MazeServer.Data.Endpoints;
+using MazeServer.Data.Repositories;
+using MazeServer.Data.Services;
+using MazeServer.Endpoints;
 using MazeServer.Messaging;
 using MazeServer.Messaging.Abstractions;
 using MazeServer.Messaging.Consumers;
@@ -9,7 +14,14 @@ using MazeServer.Messaging.Workers;
 var builder = WebApplication.CreateBuilder(args);
 
 var port = Environment.GetEnvironmentVariable("PORT") ?? "5000";
+var connectionString = "Data source=gamedata.db";
 builder.WebHost.UseUrls($"http://0.0.0.0:{port}");
+
+builder.Services.AddSingleton(new DbInitializer(connectionString));
+builder.Services.AddSingleton<ILeaderboardRepository>(new sqliteLeaderboardRepository(connectionString));
+builder.Services.AddSingleton<IPlayerProgressRepository>(new SqlitePlayerProgressRepository(connectionString));
+builder.Services.AddSingleton<LeaderboardService>();
+builder.Services.AddSingleton<PlayerProgressService>();
 
 builder.Services.AddSignalR();
 builder.Services.AddSingleton<RoomManager>();
@@ -37,7 +49,10 @@ builder.Services.AddCors(options =>
 });
 
 var app = builder.Build();
+app.Services.GetRequiredService<DbInitializer>().EnsureCreated();
 
+app.MapLeaderboardEndpoints();
+app.MapPlayerProgressEndpoints();
 app.UseCors("VueClient");
 app.MapHub<RaceHub>("/racehub");
 app.MapGet("/", () => "Maze Race server is running.");
