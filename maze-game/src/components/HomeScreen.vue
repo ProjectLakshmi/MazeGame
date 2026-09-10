@@ -2,14 +2,13 @@
 import { ref, computed,  onMounted, onUnmounted } from 'vue'
 import { useSaveData } from '@/composables/useSaveData'
 
-const emit = defineEmits(['start','settings', 'continue','endless', 'race'])
+const emit = defineEmits(['start','settings', 'continue','endless', 'race', 'leaderboard'])
 
 const showHowToPlay = ref(false)
 const difficulty = ref('normal')
-const { getBestLevelReached, getLastLevel, getEndlessBest } = useSaveData()
-const bestLevel = ref(getBestLevelReached())
-const lastLevel = computed(()=> getLastLevel())
-const bestEndlessDepth = ref(getEndlessBest())
+const { progress, lastLevel, endlessBest, loaded, loadProgress, getBestLevelReached } = useSaveData()
+const bestLevel = computed(() => getBestLevelReached())
+const bestEndlessDepth = computed(() => endlessBest.value)
 
 const difficulties = [
   { id: 'easy', label: 'Easy', note: 'Smaller mazes, slower patrol' },
@@ -87,6 +86,7 @@ function handleEndless() {
 }
 
 onMounted(() => {
+  loadProgress()
   animationFrameId = requestAnimationFrame(animatePreview)
 })
 onUnmounted(() => {
@@ -198,6 +198,14 @@ onUnmounted(() => {
               <small>Beat the clock</small>
             </span>
           </button>
+
+          <button class="secondary-btn" @click="$emit('leaderboard')">
+    <span class="secondary-icon">🏆</span>
+    <span>
+      <strong>Leaderboard</strong>
+      <small>Top racers</small>
+    </span>
+  </button>
 
           <button class="secondary-btn" @click="$emit('settings')">
             <span class="secondary-icon">⚙</span>
@@ -478,6 +486,12 @@ onUnmounted(() => {
   animation: scan 3s linear infinite;
 
   pointer-events: none;
+}
+.secondary-actions {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+  margin-top: 9px;
 }
 
 @keyframes scan {

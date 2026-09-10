@@ -8,6 +8,7 @@ import LevelEditor from './components/Leveleditor.vue'
 import RaceLobbyScreen from './components/Racelobbyscreen.vue'
 import RaceGameScreen from './components/RaceGameScreen.vue'
 import { useMultiplayerRace } from '@/composables/usemultiplayerrace'
+import LeaderboardScreen from './components/LeaderboardScreen.vue'
 
 
 const race = useMultiplayerRace()
@@ -95,6 +96,7 @@ onUnmounted(() => {
     @continue="continueLevel"
     @endless="startEndless"
     @race="openRaceLobby"
+     @leaderboard="goTo('leaderboard')"
   />
   <LevelScreen
     v-else-if="currentScreen === 'levelSelect'"
@@ -102,6 +104,7 @@ onUnmounted(() => {
     @back="goBack"
     @buildMaze="openEditor"
   />
+  <LeaderboardScreen v-if="currentView === 'leaderboard'" @back="goBack" />
   <SettingsScreen v-else-if="currentScreen === 'settings'" @back="goBack" />
   <LevelEditor
     v-else-if="currentScreen === 'editor'"

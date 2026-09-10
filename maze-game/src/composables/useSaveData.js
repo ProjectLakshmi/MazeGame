@@ -1,7 +1,8 @@
+import { ref } from 'vue'
+import { fetchProgress, submitLevelResult, submitEndlessDepth } from '@/api/gameApi'
+
+// ---------- Settings — stays in localStorage (pure UI preference, not tamperable-in-a-way-that-matters) ----------
 const SETTINGS_KEY = 'mazeSettings'
-const PROGRESS_KEY = 'mazeResults'
-const LAST_LEVEL_KEY = 'mazeLastLevel' 
-const ENDLESS_BEST_KEY = 'mazeEndlessBest' 
 
 const DEFAULT_SETTINGS = {
     soundEnabled: true,
@@ -14,7 +15,7 @@ function getSettings(){
 
         const legacySound = localStorage.getItem('mazeSoundEnabled')
         if(legacySound !== null){
-            const migrated = {...DEFAULT_SETTINGS, soundEnabled: legacySound !== 'false'} // FIXED — was "legacysound" (lowercase s), a ReferenceError
+            const migrated = {...DEFAULT_SETTINGS, soundEnabled: legacySound !== 'false'}
             saveSettings(migrated)
             return migrated
         }
@@ -27,104 +28,110 @@ function getSettings(){
 function saveSettings(settings){
     localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings))
 }
-const SECRET = 'maze-game-v1' 
 
-function sign(data) {
-  const str = JSON.stringify(data) + SECRET
-  let hash = 0
-  for (let i = 0; i < str.length; i++) {
-    hash = (hash << 5) - hash + str.charCodeAt(i)
-    hash |= 0
-  }
-  return hash.toString(36)
+// ---------- Progress — now backed by the server, not localStorage ----------
+
+// Shared reactive state — module-level so every component using useSaveData() sees the same data
+const progress = ref({})       // { [levelIndex]: { stars, moves, seconds } }
+const lastLevel = ref(null)    // null = no in-progress level yet
+const endlessBest = ref(0)
+const loaded = ref(false)
+
+// Call this once at app startup (e.g. in App.vue's onMounted) before relying on the values above
+async function loadProgress(){
+    try{
+        const data = await fetchProgress()
+        progress.value = data.progress || {}
+        lastLevel.value = data.lastLevel > 0 ? data.lastLevel : null
+        endlessBest.value = data.endlessBest || 0
+    }catch(e){
+        console.error('Failed to load progress from server', e)
+    }finally{
+        loaded.value = true
+    }
 }
 
-function saveLevelProgress(levelIndex, stars, moves, seconds) {
-  const progress = getProgress()
-  const existing = progress[levelIndex]
-  if (!existing || stars > existing.stars) {
-    progress[levelIndex] = { stars, moves, seconds }
-    const payload = { data: progress, sig: sign(progress) }
-    localStorage.setItem(PROGRESS_KEY, JSON.stringify(payload))
-  }
+function getProgress(){
+    return progress.value
 }
 
-function getProgress() {
-  try {
-    const raw = localStorage.getItem(PROGRESS_KEY)
-    if (!raw) return {}
-    const { data, sig } = JSON.parse(raw)
-    if (sign(data) !== sig) return {} 
-    return data
-  } catch {
-    return {}
-  }
+// NOTE: now async — callers need `await saveLevelProgress(...)`
+async function saveLevelProgress(levelIndex, stars, moves, seconds){
+    const existing = progress.value[levelIndex]
+    if(!existing || stars > existing.stars){
+        // optimistic local update so the UI feels instant
+        progress.value = { ...progress.value, [levelIndex]: { stars, moves, seconds } }
+    }
+    lastLevel.value = levelIndex
+    try{
+        await submitLevelResult(levelIndex, stars, moves, seconds)
+    }catch(e){
+        console.error('Failed to save level progress', e)
+    }
 }
+
 function getBestLevelReached(){
-    const progress = getProgress()
-    const indices = Object.keys(progress).map(Number)
+    const indices = Object.keys(progress.value).map(Number)
     return indices.length ? Math.max(...indices) + 1 : 0
 }
 
-// ADDED — tracks the level the player was last on, independent of stars/completion
+// lastLevel is now saved as part of saveLevelProgress automatically (server sets it alongside the level result) —
+// this standalone setter is no longer needed, but kept as a no-op-safe wrapper in case it's called anywhere else
 function saveLastLevel(levelIndex){
-    try{
-        localStorage.setItem(LAST_LEVEL_KEY, String(levelIndex))
-    }catch{
-        // ignore — non-fatal if storage is unavailable
-    }
+    lastLevel.value = levelIndex
 }
 
-// ADDED — returns null if no in-progress level exists yet
 function getLastLevel(){
+    return lastLevel.value
+}
+
+// NOTE: now async — callers need `await saveEndlessBest(...)`, and it still returns the resolved best score
+async function saveEndlessBest(depth){
+    const previous = endlessBest.value
+    endlessBest.value = Math.max(previous, depth)
     try{
-        const raw = localStorage.getItem(LAST_LEVEL_KEY)
-        if(raw === null) return null
-        const index = Number(raw)
-        return Number.isNaN(index) ? null : index
-    }catch{
-        return null
+        const { best } = await submitEndlessDepth(depth)
+        endlessBest.value = best
+        return best
+    }catch(e){
+        console.error('Failed to save endless best', e)
+        endlessBest.value = previous
+        return previous
     }
 }
 
-function resetProgress(){
-    localStorage.removeItem(PROGRESS_KEY)
-}
 function getEndlessBest(){
-    try{
-        const raw = localStorage.getItem(ENDLESS_BEST_KEY)
-        return raw ? Number(raw) : 0
-    }catch{
-        return 0
-    }
+    return endlessBest.value
 }
 
-function saveEndlessBest(depth){
-    const best = Math.max(getEndlessBest(), depth)
-    try{
-        localStorage.setItem(ENDLESS_BEST_KEY, String(best))
-    }catch{
-        
-    }
-    return best
+// Progress reset now has to happen server-side to be meaningful — see note below
+function resetProgress(){
+    console.warn('resetProgress: local reset only clears cached state, not server data. Add a DELETE endpoint if you need a real reset.')
+    progress.value = {}
+    lastLevel.value = null
 }
+
 function resetAll(){
     localStorage.removeItem(SETTINGS_KEY)
-    localStorage.removeItem(PROGRESS_KEY)
-    localStorage.removeItem(LAST_LEVEL_KEY) 
-    localStorage.removeItem(ENDLESS_BEST_KEY) 
     localStorage.removeItem('mazeSoundEnabled')
+    resetProgress()
+    endlessBest.value = 0
 }
 
 export const useSaveData = () => {
     return {
     getSettings,
     saveSettings,
+    progress,
+    lastLevel,
+    endlessBest,
+    loaded,
+    loadProgress,
     getProgress,
     saveLevelProgress,
     getBestLevelReached,
-    saveLastLevel,   
-    getLastLevel, 
+    saveLastLevel,
+    getLastLevel,
     getEndlessBest,
     saveEndlessBest,
     resetProgress,
