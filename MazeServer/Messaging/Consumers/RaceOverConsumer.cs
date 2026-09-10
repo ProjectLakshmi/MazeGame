@@ -1,4 +1,5 @@
-﻿using MazeServer.Messaging.Abstractions;
+﻿using MazeServer.Data.Services;
+using MazeServer.Messaging.Abstractions;
 using System.Text.Json;
 
 namespace MazeServer.Messaging.Consumers
@@ -6,10 +7,12 @@ namespace MazeServer.Messaging.Consumers
     public class RaceOverConsumer
     {
         private readonly IMessageConsumer _consumer;
+        private readonly LeaderboardService _leaderboardService;
 
-        public RaceOverConsumer(IMessageConsumer consumer)
+        public RaceOverConsumer(IMessageConsumer consumer, LeaderboardService leaderboardService)
         {
             _consumer = consumer;
+            _leaderboardService = leaderboardService;
         }
 
         public void StartListening()
@@ -29,8 +32,10 @@ namespace MazeServer.Messaging.Consumers
 
             foreach (var player in raceOverDto.Rankings)
             {
-                Console.WriteLine($"  {player.Name}: {player.FinishTimeMs}ms");
+                _leaderboardService.RecordFinish(player.Name, player.FinishTimeMs!.Value);
             }
+            Console.WriteLine($"[RaceOverConsumer] Saved {raceOverDto.Rankings.Count} results to leaderboard.");
         }
     }
-}
+    }
+
